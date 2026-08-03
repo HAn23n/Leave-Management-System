@@ -89,12 +89,15 @@ create policy leave_requests_insert_own on leave_requests for insert to authenti
 
 -- The owner may only edit while draft/returned/pending (editing before
 -- approval, submitting, or cancelling). WITH CHECK restricts the resulting
--- status to draft/pending/cancelled only — a plain user can never set their
--- own request to approved/rejected/returned (only the approver/admin
--- policies below allow that)
+-- status to draft/pending/returned/cancelled only — a plain user can never
+-- set their own request to approved/rejected (only the approver/admin
+-- policies below allow that). 'returned' is included so that editing a
+-- returned request's fields (which doesn't touch status) doesn't itself get
+-- rejected by RLS — see PATCH /api/leave-requests/[id], which never changes
+-- status.
 create policy leave_requests_update_own on leave_requests for update to authenticated
   using (user_id = auth.uid() and status in ('draft', 'returned', 'pending'))
-  with check (user_id = auth.uid() and status in ('draft', 'pending', 'cancelled'));
+  with check (user_id = auth.uid() and status in ('draft', 'pending', 'returned', 'cancelled'));
 
 -- An approver can act (approve/reject/return) on requests within their own team
 create policy leave_requests_update_approver on leave_requests for update to authenticated

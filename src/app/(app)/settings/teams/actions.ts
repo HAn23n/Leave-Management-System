@@ -31,7 +31,11 @@ export async function addTeamLead(formData: FormData) {
   if (!userId) return;
 
   const supabase = createServerSupabaseClient();
-  await supabase.from("team_leads").insert({ team_id: teamId, user_id: userId });
+  // ignoreDuplicates: re-adding an existing lead (team_id, user_id) is a
+  // harmless no-op instead of a swallowed unique-violation error.
+  await supabase
+    .from("team_leads")
+    .upsert({ team_id: teamId, user_id: userId }, { onConflict: "team_id,user_id", ignoreDuplicates: true });
   revalidatePath("/settings/teams");
 }
 

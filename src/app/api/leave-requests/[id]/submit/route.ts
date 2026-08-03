@@ -22,6 +22,11 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
     id: params.id,
     fromStatuses: ["draft", "returned"],
     toStatus: "pending",
+    // Clear any decision left over from a previous return/rejection — a fresh
+    // submission has no approver or note yet, and leaving the old ones in
+    // place would show a stale approver/note on what is now a pending request.
+    approverId: null,
+    approverNote: null,
   });
 
   if (!result.ok) {

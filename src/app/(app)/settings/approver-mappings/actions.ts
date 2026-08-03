@@ -11,7 +11,14 @@ export async function createApproverMapping(formData: FormData) {
   if (!userId || !approverId || userId === approverId) return;
 
   const supabase = createServerSupabaseClient();
-  await supabase.from("approver_mappings").insert({ user_id: userId, approver_id: approverId });
+  // ignoreDuplicates: re-adding an existing (user_id, approver_id) override
+  // is a harmless no-op instead of a swallowed unique-violation error.
+  await supabase
+    .from("approver_mappings")
+    .upsert(
+      { user_id: userId, approver_id: approverId },
+      { onConflict: "user_id,approver_id", ignoreDuplicates: true }
+    );
   revalidatePath("/settings/approver-mappings");
 }
 

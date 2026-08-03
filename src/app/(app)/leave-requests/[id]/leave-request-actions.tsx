@@ -52,9 +52,11 @@ export function LeaveRequestActions({
   const canOwnerSubmit = isOwner && (status === "draft" || status === "returned");
   const canOwnerCancel = isOwner && (status === "draft" || status === "pending");
   const canApproverAct = isApproverInScope && !isOwner && status === "pending";
-  const canApproverCancelApproved = isApproverInScope && status === "approved";
+  // The cancel API also allows approver/admin to cancel an already-approved
+  // or returned request (see /api/leave-requests/[id]/cancel) — mirror both here.
+  const canApproverCancel = isApproverInScope && (status === "approved" || status === "returned");
 
-  if (!canOwnerSubmit && !canOwnerCancel && !canApproverAct && !canApproverCancelApproved) {
+  if (!canOwnerSubmit && !canOwnerCancel && !canApproverAct && !canApproverCancel) {
     return null;
   }
 
@@ -105,7 +107,7 @@ export function LeaveRequestActions({
         </div>
       )}
 
-      {(canOwnerCancel || canApproverCancelApproved) && (
+      {(canOwnerCancel || canApproverCancel) && (
         <Button disabled={busy} variant="ghost" onClick={() => post("cancel")}>
           ยกเลิกคำขอลา
         </Button>

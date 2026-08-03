@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database, LeaveRequest, LeaveStatus } from "@/lib/supabase/types";
+import type { AppUser, Database, LeaveRequest, LeaveStatus } from "@/lib/supabase/types";
+import { notifyLeaveDecision } from "@/lib/email";
 
 interface TransitionParams {
   supabase: SupabaseClient<Database>;
@@ -61,4 +62,61 @@ export async function transitionLeaveRequest({
   }
 
   return { ok: true, request: data };
+}
+
+/**
+ * Shared by the approve/reject/return routes: moves a pending request out of
+ * pending and, best-effort, emails the requester. Notification failures never
+ * roll back or mask the decision that already committed above.
+ */
+export async function decideOnPendingRequest({
+  supabase,
+  id,
+  actor,
+  decision,
+  note,
+}: {
+  supabase: SupabaseClient<Database>;
+  id: string;
+  actor: AppUser;
+  decision: "approved" | "rejected" | "returned";
+  note: string | null;
+}): Promise<TransitionResult> {
+  const result = await transitionLeaveRequest({
+    supabase,
+    id,
+    fromStatuses: ["pending"],
+    toStatus: decision,
+    approverId: actor.id,
+    approverNote: note,
+  });
+
+  if (!result.ok) return result;
+
+  const requestRow = result.request!;
+  try {
+    const [{ data: requester }, { data: leaveType }] = await Promise.all([
+      supabase.from("users").select("email, full_name").eq("id", requestRow.user_id).single(),
+      supabase.from("leave_types").select("name").eq("id", requestRow.leave_type_id).single(),
+    ]);
+
+    if (requester) {
+      await notifyLeaveDecision({
+        requesterEmail: requester.email,
+        requesterName: requester.full_name,
+        requestNo: requestRow.request_no,
+        leaveTypeName: leaveType?.name ?? "",
+        startDate: requestRow.start_date,
+        endDate: requestRow.end_date,
+        decision,
+        approverName: actor.full_name,
+        approverNote: note,
+        requestUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/leave-requests/${requestRow.id}`,
+      });
+    }
+  } catch {
+    // Non-fatal — see comment above.
+  }
+
+  return result;
 }

@@ -1,0 +1,127 @@
+import { notFound } from "next/navigation";
+import Link from "next/link";
+import { requireAppUser } from "@/lib/auth";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { formatThaiDate } from "@/lib/date";
+import { STATUS_LABEL_TH, STATUS_BADGE_VARIANT, PERIOD_LABEL_TH } from "@/lib/status";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { LeaveRequestActions } from "./leave-request-actions";
+
+export default async function LeaveRequestDetailPage({ params }: { params: { id: string } }) {
+  const appUser = await requireAppUser();
+  const supabase = createServerSupabaseClient();
+
+  const { data: leaveRequest } = await supabase
+    .from("leave_requests")
+    .select("*")
+    .eq("id", params.id)
+    .maybeSingle();
+
+  if (!leaveRequest) notFound();
+
+  const [{ data: leaveType }, { data: requester }, { data: approver }, { data: logs }] = await Promise.all([
+    supabase.from("leave_types").select("name").eq("id", leaveRequest.leave_type_id).maybeSingle(),
+    supabase.from("users").select("full_name").eq("id", leaveRequest.user_id).maybeSingle(),
+    leaveRequest.approver_id
+      ? supabase.from("users").select("full_name").eq("id", leaveRequest.approver_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    supabase
+      .from("leave_request_logs")
+      .select("*")
+      .eq("request_id", leaveRequest.id)
+      .order("created_at", { ascending: true }),
+  ]);
+
+  const actorIds = Array.from(new Set((logs ?? []).map((l) => l.actor_id).filter(Boolean))) as string[];
+  const { data: actors } =
+    actorIds.length > 0
+      ? await supabase.from("users").select("id, full_name").in("id", actorIds)
+      : { data: [] as { id: string; full_name: string }[] };
+  const actorMap = new Map((actors ?? []).map((a) => [a.id, a.full_name]));
+
+  const isOwner = leaveRequest.user_id === appUser.id;
+  const isApproverInScope = appUser.role === "approver" || appUser.role === "admin";
+
+  return (
+    <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-4 p-4 pb-28">
+      <div className="flex items-center justify-between">
+        <h1 className="text-lg font-semibold text-foreground">รายละเอียดคำขอลา</h1>
+        <Badge variant={STATUS_BADGE_VARIANT[leaveRequest.status]}>
+          {STATUS_LABEL_TH[leaveRequest.status]}
+        </Badge>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{leaveType?.name ?? "-"}</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-2 text-sm">
+          {leaveRequest.request_no && (
+            <Row label="เลขที่เอกสาร" value={leaveRequest.request_no} />
+          )}
+          <Row label="ผู้ขอลา" value={requester?.full_name ?? "-"} />
+          <Row
+            label="วันที่เริ่ม"
+            value={`${formatThaiDate(leaveRequest.start_date)} (${PERIOD_LABEL_TH[leaveRequest.start_period]})`}
+          />
+          <Row
+            label="วันที่สิ้นสุด"
+            value={`${formatThaiDate(leaveRequest.end_date)} (${PERIOD_LABEL_TH[leaveRequest.end_period]})`}
+          />
+          <Row label="จำนวนวันลา" value={leaveRequest.total_days != null ? `${leaveRequest.total_days} วัน` : "-"} />
+          <Row label="เหตุผล" value={leaveRequest.reason || "-"} />
+          {approver && <Row label="ผู้อนุมัติ" value={approver.full_name} />}
+          {leaveRequest.approver_note && <Row label="หมายเหตุ" value={leaveRequest.approver_note} />}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>ประวัติเอกสาร</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ol className="flex flex-col gap-3 border-l border-border pl-4">
+            {(logs ?? []).map((log) => (
+              <li key={log.id} className="relative text-sm">
+                <span className="absolute -left-[21px] top-1 h-2 w-2 rounded-full bg-primary" />
+                <p className="font-medium text-foreground">
+                  {log.from_status ? `${STATUS_LABEL_TH[log.from_status]} → ` : ""}
+                  {STATUS_LABEL_TH[log.to_status]}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {log.actor_id ? actorMap.get(log.actor_id) ?? "-" : "ระบบ"} ·{" "}
+                  {formatThaiDate(log.created_at.slice(0, 10), "long")}
+                </p>
+                {log.note && <p className="mt-1 text-xs text-muted-foreground">หมายเหตุ: {log.note}</p>}
+              </li>
+            ))}
+          </ol>
+        </CardContent>
+      </Card>
+
+      {isOwner && (leaveRequest.status === "draft" || leaveRequest.status === "returned") && (
+        <Button asChild variant="outline">
+          <Link href={`/leave-requests/${leaveRequest.id}/edit`}>แก้ไข</Link>
+        </Button>
+      )}
+
+      <LeaveRequestActions
+        requestId={leaveRequest.id}
+        status={leaveRequest.status}
+        isOwner={isOwner}
+        isApproverInScope={isApproverInScope}
+      />
+    </main>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-4">
+      <span className="shrink-0 text-muted-foreground">{label}</span>
+      <span className="text-right font-medium text-foreground">{value}</span>
+    </div>
+  );
+}

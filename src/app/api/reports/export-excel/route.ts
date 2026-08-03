@@ -5,12 +5,15 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { buildReportQuery, loadReportLookups } from "@/lib/reports";
 import { formatThaiDate } from "@/lib/date";
 import { STATUS_LABEL_TH, PERIOD_LABEL_TH } from "@/lib/status";
+import { rateLimitResponse } from "@/lib/rate-limit";
 
 export async function GET(request: NextRequest) {
   const appUser = await getCurrentAppUser();
   if (!appUser) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+  const limited = rateLimitResponse(appUser.id);
+  if (limited) return limited;
 
   const { searchParams } = new URL(request.url);
   const supabase = createServerSupabaseClient();

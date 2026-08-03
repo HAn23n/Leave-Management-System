@@ -3,12 +3,15 @@ import { getCurrentAppUser } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { transitionLeaveRequest } from "@/lib/leave-requests";
 import type { LeaveStatus } from "@/lib/supabase/types";
+import { rateLimitResponse } from "@/lib/rate-limit";
 
 export async function POST(_request: NextRequest, { params }: { params: { id: string } }) {
   const appUser = await getCurrentAppUser();
   if (!appUser) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+  const limited = rateLimitResponse(appUser.id);
+  if (limited) return limited;
 
   const supabase = createServerSupabaseClient();
 

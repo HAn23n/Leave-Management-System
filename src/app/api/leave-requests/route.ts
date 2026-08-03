@@ -2,12 +2,16 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentAppUser } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { leaveRequestInputSchema } from "@/lib/validation/leave-request";
+import { rateLimitResponse } from "@/lib/rate-limit";
 
 export async function POST(request: NextRequest) {
   const appUser = await getCurrentAppUser();
   if (!appUser) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+  const limited = rateLimitResponse(appUser.id);
+  if (limited) return limited;
+
   if (!appUser.team_id) {
     return NextResponse.json({ error: "no_team" }, { status: 400 });
   }

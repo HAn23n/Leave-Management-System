@@ -2,12 +2,15 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentAppUser } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { leaveRequestInputSchema } from "@/lib/validation/leave-request";
+import { rateLimitResponse } from "@/lib/rate-limit";
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   const appUser = await getCurrentAppUser();
   if (!appUser) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+  const limited = rateLimitResponse(appUser.id);
+  if (limited) return limited;
 
   const body = await request.json().catch(() => null);
   const parsed = leaveRequestInputSchema.safeParse(body);

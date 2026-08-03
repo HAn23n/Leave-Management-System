@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentAppUser } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { transitionLeaveRequest } from "@/lib/leave-requests";
+import { rateLimitResponse } from "@/lib/rate-limit";
 
 // "Save and approve" shortcut: an approver filing their own leave skips
 // pending and goes straight to approved. Distinct from the approve action in
@@ -14,6 +15,8 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
   if (appUser.role !== "approver" && appUser.role !== "admin") {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
+  const limited = rateLimitResponse(appUser.id);
+  if (limited) return limited;
 
   const supabase = createServerSupabaseClient();
 

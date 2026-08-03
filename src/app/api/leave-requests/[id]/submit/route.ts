@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { transitionLeaveRequest } from "@/lib/leave-requests";
 import { resolveApprovers } from "@/lib/approval-chain";
 import { notifyNewLeaveRequest } from "@/lib/email";
+import { rateLimitResponse } from "@/lib/rate-limit";
 
 // draft/returned -> pending, owner only. Notifies the resolved approver(s).
 export async function POST(_request: NextRequest, { params }: { params: { id: string } }) {
@@ -11,6 +12,8 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
   if (!appUser) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+  const limited = rateLimitResponse(appUser.id);
+  if (limited) return limited;
 
   const supabase = createServerSupabaseClient();
 

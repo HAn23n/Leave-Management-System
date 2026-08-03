@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentAppUser } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { decideOnPendingRequest } from "@/lib/leave-requests";
+import { rateLimitResponse } from "@/lib/rate-limit";
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const appUser = await getCurrentAppUser();
@@ -11,6 +12,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   if (appUser.role !== "approver" && appUser.role !== "admin") {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
+  const limited = rateLimitResponse(appUser.id);
+  if (limited) return limited;
 
   const body = await request.json().catch(() => null);
   const note = typeof body?.note === "string" ? body.note.trim() : "";

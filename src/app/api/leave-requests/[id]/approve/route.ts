@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentAppUser } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { decideOnPendingRequest } from "@/lib/leave-requests";
+import { rateLimitResponse } from "@/lib/rate-limit";
 
 // Approver/admin acting on someone else's pending request. RLS restricts this
 // to requests within the approver's own team (or any team for admin).
@@ -13,6 +14,8 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
   if (appUser.role !== "approver" && appUser.role !== "admin") {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
+  const limited = rateLimitResponse(appUser.id);
+  if (limited) return limited;
 
   const supabase = createServerSupabaseClient();
   const result = await decideOnPendingRequest({

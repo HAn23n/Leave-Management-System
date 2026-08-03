@@ -31,7 +31,14 @@ A mobile-first, installable (PWA) leave-request/approval app for a small organiz
    supabase link --project-ref <your-project-ref>
    supabase db push
    ```
-   Migration files: [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) (schema, RLS, functions, triggers, seed data — teams/leave types/2026 fixed-date holidays), then [`0002_approver_visibility.sql`](supabase/migrations/0002_approver_visibility.sql).
+   Migration files run in filename order — `supabase/migrations/`:
+   - `0001_tables.sql` — extension + all tables
+   - `0002_functions.sql` — `auth_role()`/`auth_team_id()` RLS helpers, `calc_total_days()`, `gen_request_no()`
+   - `0003_triggers.sql` — `updated_at`, privileged-field guard, team-change guard, request_no generation, overlap check, total_days freeze, status-change audit log
+   - `0004_policies.sql` — RLS enabled + every policy
+   - `0005_grants.sql` — table-level grants to `authenticated`
+   - `0006_seed.sql` — ทีม A, leave types, 2026 fixed-date holidays
+   - `0007_approver_visibility.sql` — follow-up fix so a plain `user` can see their own approver's name
 3. **Enable Google OAuth**: Supabase Dashboard → Authentication → Providers → Google. You'll need a Google Cloud OAuth 2.0 Client ID/Secret (see below). Set the Supabase-provided callback URL as an authorized redirect URI in Google Cloud.
 4. **Set the site URL and redirect URLs**: Authentication → URL Configuration.
    - Site URL: your app's URL (e.g. `https://your-app.vercel.app`, or `http://localhost:3000` for local dev)
@@ -103,7 +110,7 @@ npm run typecheck    # tsc --noEmit, strict mode
 
 ## Security notes
 
-- **RLS is the real access-control boundary**, enforced at the database level for every table (see `supabase/migrations/0001_init.sql`) — scoped by role/team, not just filtered in the UI. API routes re-check auth/role server-side too, but RLS is the backstop even if a route had a bug.
+- **RLS is the real access-control boundary**, enforced at the database level for every table (see `supabase/migrations/0004_policies.sql`) — scoped by role/team, not just filtered in the UI. API routes re-check auth/role server-side too, but RLS is the backstop even if a route had a bug.
 - **Service role key never reaches the client.** `lib/supabase/admin.ts` is guarded with the `server-only` package, which fails the build if it's ever imported from client code. It's used narrowly (e.g. resolving an approver's email to notify — a lookup a plain `user` can't otherwise make via RLS).
 - **No client-side privilege escalation**: the `users` table's self-insert RLS policy forces `role='user'`/`is_active=true` on account creation; a `role`/`is_active` change is additionally blocked by a trigger unless the actor is already an admin. New leave requests must start as `status='draft'` — a client can't insert directly into `pending`/`approved`.
 - **Status transitions are transactional with an optimistic lock**: every transition is a single `UPDATE ... WHERE id = $1 AND status = ANY($2)`, which is atomic in Postgres and reports a conflict (409) instead of clobbering a status another actor already changed (e.g. two team leads approving at once). See `lib/leave-requests.ts`.

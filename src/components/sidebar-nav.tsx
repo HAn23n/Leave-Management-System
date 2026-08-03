@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { NavItem } from "./nav-items";
+import { isNavItemActive, type NavItem } from "./nav-items";
 import { NavIcon } from "./nav-icon";
 import { cn } from "@/lib/utils";
 
@@ -13,7 +13,7 @@ export function SidebarNav({ items, userLabel }: { items: NavItem[]; userLabel: 
   return (
     <aside className="hidden w-60 shrink-0 flex-col border-r border-border bg-white md:flex">
       <div className="flex h-16 items-center gap-2 border-b border-border px-4">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
+        <div className="gradient-primary flex h-8 w-8 items-center justify-center rounded-xl text-sm font-bold text-primary-foreground shadow-sm shadow-primary/30">
           ล
         </div>
         <span className="text-sm font-semibold text-foreground">ระบบบันทึกการลา</span>
@@ -21,15 +21,15 @@ export function SidebarNav({ items, userLabel }: { items: NavItem[]; userLabel: 
 
       <nav className="flex flex-1 flex-col gap-1 p-3">
         {items.map((item) => {
-          const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+          const active = isNavItemActive(pathname, items, item);
           return (
             <Link
               key={item.href}
               href={item.href}
               className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                "flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-all duration-150",
                 active
-                  ? "bg-accent text-accent-foreground"
+                  ? "bg-accent text-accent-foreground shadow-sm"
                   : "text-foreground hover:bg-accent/50"
               )}
             >

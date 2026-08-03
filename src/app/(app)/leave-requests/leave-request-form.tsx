@@ -4,11 +4,17 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ThaiDateSelect } from "@/components/thai-date-select";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { calcTotalDaysClient, todayIso, type LeavePeriodClient } from "@/lib/date";
-import { PERIOD_LABEL_TH } from "@/lib/status";
 import type { LeaveRequest, LeaveType, UserRole } from "@/lib/supabase/types";
+
+const PERIOD_OPTIONS: { value: LeavePeriodClient; label: string }[] = [
+  { value: "morning", label: "เช้า" },
+  { value: "full", label: "เต็มวัน" },
+  { value: "afternoon", label: "บ่าย" },
+];
 
 interface LeaveRequestFormProps {
   mode: "create" | "edit";
@@ -192,12 +198,12 @@ export function LeaveRequestForm({
             onChange={(e) => setReason(e.target.value)}
             disabled={busy}
             rows={4}
-            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+            className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
             placeholder="ระบุเหตุผลการลา"
           />
         </div>
 
-        <div className="rounded-lg bg-accent px-4 py-3 text-accent-foreground">
+        <div className="rounded-2xl bg-accent px-4 py-3 text-accent-foreground">
           <span className="text-sm">จำนวนวันลา</span>
           <p className="text-2xl font-semibold">{previewDays.toFixed(1)} วัน</p>
         </div>
@@ -233,18 +239,5 @@ function PeriodPicker({
   onChange: (p: LeavePeriodClient) => void;
   disabled?: boolean;
 }) {
-  return (
-    <Select value={value} onValueChange={(v) => onChange(v as LeavePeriodClient)} disabled={disabled}>
-      <SelectTrigger>
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {(Object.keys(PERIOD_LABEL_TH) as LeavePeriodClient[]).map((p) => (
-          <SelectItem key={p} value={p}>
-            {PERIOD_LABEL_TH[p]}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
+  return <SegmentedControl options={PERIOD_OPTIONS} value={value} onChange={onChange} disabled={disabled} />;
 }

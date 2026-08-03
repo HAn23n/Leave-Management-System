@@ -65,7 +65,7 @@ export default async function LeaveRequestsSearchPage({
         <select
           name="status"
           defaultValue={searchParams.status ?? ""}
-          className="h-10 rounded-md border border-input bg-background px-2 text-sm"
+          className="h-10 rounded-xl border border-input bg-background px-2 text-sm"
         >
           <option value="">ทุกสถานะ</option>
           {(Object.keys(STATUS_LABEL_TH) as LeaveStatus[]).map((s) => (
@@ -78,7 +78,7 @@ export default async function LeaveRequestsSearchPage({
         <select
           name="leave_type_id"
           defaultValue={searchParams.leave_type_id ?? ""}
-          className="h-10 rounded-md border border-input bg-background px-2 text-sm"
+          className="h-10 rounded-xl border border-input bg-background px-2 text-sm"
         >
           <option value="">ทุกประเภท</option>
           {(leaveTypes ?? []).map((lt) => (
@@ -92,13 +92,13 @@ export default async function LeaveRequestsSearchPage({
           type="date"
           name="from"
           defaultValue={searchParams.from ?? ""}
-          className="h-10 rounded-md border border-input bg-background px-2 text-sm"
+          className="h-10 rounded-xl border border-input bg-background px-2 text-sm"
         />
         <input
           type="date"
           name="to"
           defaultValue={searchParams.to ?? ""}
-          className="h-10 rounded-md border border-input bg-background px-2 text-sm"
+          className="h-10 rounded-xl border border-input bg-background px-2 text-sm"
         />
 
         <Button type="submit" variant="outline" size="sm" className="col-span-2 md:col-span-4">
@@ -115,7 +115,7 @@ export default async function LeaveRequestsSearchPage({
           <Link
             key={r.id}
             href={`/leave-requests/${r.id}`}
-            className="flex flex-col gap-1 rounded-lg border border-border bg-white p-4 transition-colors hover:bg-accent/30"
+            className="flex flex-col gap-1 rounded-2xl border border-border bg-white p-4 shadow-sm shadow-black/[0.02] transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md"
           >
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-foreground">

@@ -54,7 +54,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Repo
           <select
             name="user_id"
             defaultValue={searchParams.user_id ?? ""}
-            className="h-10 rounded-md border border-input bg-background px-2 text-sm"
+            className="h-10 rounded-xl border border-input bg-background px-2 text-sm"
           >
             <option value="">ทุกคน</option>
             {(teamUsers ?? []).map((u) => (
@@ -69,7 +69,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Repo
           <select
             name="team_id"
             defaultValue={searchParams.team_id ?? ""}
-            className="h-10 rounded-md border border-input bg-background px-2 text-sm"
+            className="h-10 rounded-xl border border-input bg-background px-2 text-sm"
           >
             <option value="">ทุกทีม</option>
             {(teams ?? []).map((t) => (
@@ -83,7 +83,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Repo
         <select
           name="leave_type_id"
           defaultValue={searchParams.leave_type_id ?? ""}
-          className="h-10 rounded-md border border-input bg-background px-2 text-sm"
+          className="h-10 rounded-xl border border-input bg-background px-2 text-sm"
         >
           <option value="">ทุกประเภท</option>
           {(leaveTypes ?? []).map((lt) => (
@@ -96,7 +96,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Repo
         <select
           name="status"
           defaultValue={searchParams.status ?? ""}
-          className="h-10 rounded-md border border-input bg-background px-2 text-sm"
+          className="h-10 rounded-xl border border-input bg-background px-2 text-sm"
         >
           <option value="">ทุกสถานะ</option>
           {(Object.keys(STATUS_LABEL_TH) as LeaveStatus[]).map((s) => (
@@ -110,13 +110,13 @@ export default async function ReportsPage({ searchParams }: { searchParams: Repo
           type="date"
           name="from"
           defaultValue={searchParams.from ?? ""}
-          className="h-10 rounded-md border border-input bg-background px-2 text-sm"
+          className="h-10 rounded-xl border border-input bg-background px-2 text-sm"
         />
         <input
           type="date"
           name="to"
           defaultValue={searchParams.to ?? ""}
-          className="h-10 rounded-md border border-input bg-background px-2 text-sm"
+          className="h-10 rounded-xl border border-input bg-background px-2 text-sm"
         />
 
         <Button type="submit" variant="outline" size="sm">

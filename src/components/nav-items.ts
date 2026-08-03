@@ -21,3 +21,19 @@ export function getSidebarNavItems(role: UserRole): NavItem[] {
   }
   return items;
 }
+
+/**
+ * Two nav items can both be valid prefix matches for the same path (e.g.
+ * "/leave-requests" and "/leave-requests/new" both match "/leave-requests/new"),
+ * which used to highlight both at once. Only the item with the longest
+ * matching href — the most specific one — should ever be considered active.
+ */
+export function isNavItemActive(pathname: string, items: NavItem[], item: NavItem): boolean {
+  const matches = items.filter((i) =>
+    i.href === "/" ? pathname === "/" : pathname === i.href || pathname.startsWith(`${i.href}/`)
+  );
+  if (matches.length === 0) return false;
+
+  const best = matches.reduce((a, b) => (b.href.length > a.href.length ? b : a));
+  return best.href === item.href;
+}

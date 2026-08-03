@@ -99,6 +99,8 @@ update users set role = 'admin' where email = 'you@yourcompany.com';
 4. Add your Vercel domain to Supabase's Redirect URLs (Authentication → URL Configuration) and as an authorized redirect URI wherever needed.
 5. Deploy.
 
+`vercel.json` pins the deployed functions to the `bom1` (Mumbai) region — match this to whichever region your Supabase project actually lives in (Project Settings → General → Region). Every page does at least one auth check plus one or more DB queries against Supabase; if the function region and the database region are on different continents, that round-trip latency compounds and the whole app feels sluggish on every navigation. Co-locating them is the single biggest lever for perceived speed here.
+
 ## Development
 
 ```bash

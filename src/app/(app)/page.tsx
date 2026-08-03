@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireAppUser } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { formatThaiDate } from "@/lib/date";
-import { STATUS_LABEL_TH, STATUS_BADGE_VARIANT } from "@/lib/status";
+import { STATUS_LABEL_TH, STATUS_BADGE_VARIANT, STATUS_ACCENT_CLASS } from "@/lib/status";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { LeaveStatus } from "@/lib/supabase/types";
@@ -49,16 +49,17 @@ export default async function DashboardPage() {
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 p-4 pb-24">
       <div>
-        <h1 className="text-lg font-semibold text-foreground">สวัสดี, {appUser.full_name}</h1>
+        <h1 className="text-xl font-bold tracking-tight text-foreground">สวัสดี, {appUser.full_name}</h1>
         <p className="text-sm text-muted-foreground">สรุปคำขอลาของฉัน</p>
       </div>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         {SUMMARY_STATUSES.map((status) => (
           <Link key={status} href={`/leave-requests?status=${status}`}>
-            <Card className="transition-colors hover:bg-accent/30">
-              <CardContent className="flex flex-col items-center gap-1 p-4">
-                <span className="text-2xl font-semibold text-foreground">{counts[status] ?? 0}</span>
+            <Card className="group overflow-hidden transition-all hover:-translate-y-0.5 hover:shadow-md">
+              <div className={`h-1 w-full ${STATUS_ACCENT_CLASS[status]}`} />
+              <CardContent className="flex flex-col gap-1 p-4">
+                <span className="text-3xl font-bold tracking-tight text-foreground">{counts[status] ?? 0}</span>
                 <span className="text-xs text-muted-foreground">{STATUS_LABEL_TH[status]}</span>
               </CardContent>
             </Card>
@@ -79,7 +80,7 @@ export default async function DashboardPage() {
               <Link
                 key={r.id}
                 href={`/leave-requests/${r.id}`}
-                className="flex items-center justify-between rounded-md border border-border p-3 hover:bg-accent/30"
+                className="flex items-center justify-between rounded-xl border border-border p-3 transition-colors hover:border-primary/30 hover:bg-accent/40"
               >
                 <div>
                   <p className="text-sm font-medium text-foreground">

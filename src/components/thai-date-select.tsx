@@ -49,7 +49,7 @@ export function ThaiDateSelect({
   const days = Array.from({ length: daysInMonth(ceYear, monthIndex) }, (_, i) => i + 1);
 
   const selectClass =
-    "h-11 flex-1 rounded-md border border-input bg-background px-2 text-sm disabled:cursor-not-allowed disabled:opacity-50";
+    "h-11 flex-1 rounded-xl border border-input bg-background px-2 text-sm disabled:cursor-not-allowed disabled:opacity-50";
 
   return (
     <div className="flex gap-2">

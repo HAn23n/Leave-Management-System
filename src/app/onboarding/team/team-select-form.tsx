@@ -58,7 +58,7 @@ export function TeamSelectForm({ teams }: { teams: TeamOption[] }) {
           type="button"
           onClick={() => setSelected(team.id)}
           className={cn(
-            "flex h-12 items-center justify-center rounded-md border px-4 text-sm font-medium transition-colors",
+            "flex h-12 items-center justify-center rounded-xl border px-4 text-sm font-medium transition-colors",
             selected === team.id
               ? "border-primary bg-accent text-accent-foreground"
               : "border-input bg-background text-foreground hover:bg-accent/50"

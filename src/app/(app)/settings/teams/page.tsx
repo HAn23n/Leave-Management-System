@@ -69,7 +69,7 @@ export default async function TeamsSettingsPage() {
                 {availableUsers.length > 0 && (
                   <form action={addTeamLead} className="flex gap-2 pt-2">
                     <input type="hidden" name="team_id" value={team.id} />
-                    <select name="user_id" required className="h-9 flex-1 rounded-md border border-input bg-background px-2 text-sm">
+                    <select name="user_id" required className="h-9 flex-1 rounded-xl border border-input bg-background px-2 text-sm">
                       <option value="">เลือกสมาชิกในทีมเป็นหัวหน้า</option>
                       {availableUsers.map((u) => (
                         <option key={u.id} value={u.id}>

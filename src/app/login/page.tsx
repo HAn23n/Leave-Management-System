@@ -25,12 +25,12 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex flex-1 flex-col items-center justify-center gap-8 bg-white p-6">
-      <div className="flex flex-col items-center gap-2 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-2xl font-bold text-primary-foreground">
+    <main className="flex flex-1 flex-col items-center justify-center gap-8 bg-background p-6">
+      <div className="flex flex-col items-center gap-3 text-center">
+        <div className="gradient-primary flex h-16 w-16 items-center justify-center rounded-2xl text-3xl font-bold text-primary-foreground shadow-lg shadow-primary/25">
           ล
         </div>
-        <h1 className="text-2xl font-semibold text-foreground">ระบบบันทึกการลา</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">ระบบบันทึกการลา</h1>
         <p className="text-muted-foreground">เข้าสู่ระบบด้วยบัญชี Google ขององค์กร</p>
       </div>
 

@@ -2,39 +2,43 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Red/white theme for the Leave Management System */
+/* Red/white theme for the Leave Management System — refreshed for a
+   warmer, rounder, more contemporary feel: softer off-white surfaces,
+   a punchier primary red with a pink-leaning gradient partner for CTAs,
+   and generally rounder corners. */
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 9%;
+    --background: 20 20% 98%;
+    --foreground: 240 10% 12%;
 
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 9%;
+    --card-foreground: 240 10% 12%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 9%;
+    --popover-foreground: 240 10% 12%;
 
-    /* primary red */
-    --primary: 0 72% 45%;
+    /* primary red, gradient partner is --primary-glow */
+    --primary: 356 82% 52%;
+    --primary-glow: 340 90% 60%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 0 0% 96%;
-    --secondary-foreground: 0 0% 9%;
+    --secondary: 20 14% 95%;
+    --secondary-foreground: 240 10% 12%;
 
-    --muted: 0 0% 96%;
-    --muted-foreground: 0 0% 45%;
+    --muted: 20 14% 95%;
+    --muted-foreground: 240 5% 45%;
 
-    --accent: 0 72% 96%;
-    --accent-foreground: 0 72% 30%;
+    --accent: 356 100% 96%;
+    --accent-foreground: 356 70% 34%;
 
-    --destructive: 0 84% 40%;
+    --destructive: 0 84% 42%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 0 0% 90%;
-    --input: 0 0% 90%;
-    --ring: 0 72% 45%;
+    --border: 20 12% 89%;
+    --input: 20 12% 89%;
+    --ring: 356 82% 52%;
 
-    --radius: 0.75rem;
+    --radius: 1rem;
   }
 }
 
@@ -45,5 +49,11 @@
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-sans, "Noto Sans Thai", "Sarabun", Arial, sans-serif);
+  }
+}
+
+@layer utilities {
+  .gradient-primary {
+    background-image: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary-glow)));
   }
 }

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { PRIMARY_NAV_ITEMS } from "./nav-items";
+import { PRIMARY_NAV_ITEMS, isNavItemActive } from "./nav-items";
 import { NavIcon } from "./nav-icon";
 import { cn } from "@/lib/utils";
 
@@ -16,7 +16,7 @@ export function BottomTabBar() {
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       {PRIMARY_NAV_ITEMS.map((item) => {
-        const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+        const active = isNavItemActive(pathname, PRIMARY_NAV_ITEMS, item);
         return (
           <Link
             key={item.href}

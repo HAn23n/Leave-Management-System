@@ -16,7 +16,7 @@ export default async function LeaveTypesSettingsPage() {
 
       <form action={createLeaveType} className="flex gap-2">
         <Input name="name" placeholder="ชื่อประเภทการลา" required className="flex-1" />
-        <input type="color" name="color" defaultValue="#c81e1e" className="h-11 w-14 rounded-md border border-input" />
+        <input type="color" name="color" defaultValue="#c81e1e" className="h-11 w-14 rounded-xl border border-input" />
         <Button type="submit">เพิ่ม</Button>
       </form>
 

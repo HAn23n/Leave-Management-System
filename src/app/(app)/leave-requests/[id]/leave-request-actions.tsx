@@ -93,13 +93,13 @@ export function LeaveRequestActions({
       )}
 
       {noteAction && (
-        <div className="flex flex-col gap-2 rounded-md border border-border p-3">
+        <div className="flex flex-col gap-2 rounded-xl border border-border p-3">
           <textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder={noteAction === "reject" ? "เหตุผลที่ไม่อนุมัติ" : "เหตุผลที่ส่งคืน"}
             rows={3}
-            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
           />
           <Button disabled={busy || !note.trim()} onClick={() => post(noteAction, { note })}>
             ยืนยัน{noteAction === "reject" ? "ไม่อนุมัติ" : "ส่งคืน"}

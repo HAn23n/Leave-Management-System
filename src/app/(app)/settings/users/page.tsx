@@ -40,7 +40,7 @@ export default async function UsersSettingsPage() {
                 <select
                   name="role"
                   defaultValue={u.role}
-                  className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                  className="h-9 rounded-xl border border-input bg-background px-2 text-sm"
                 >
                   {Object.entries(ROLE_LABEL).map(([value, label]) => (
                     <option key={value} value={value}>
@@ -58,7 +58,7 @@ export default async function UsersSettingsPage() {
                 <select
                   name="team_id"
                   defaultValue={u.team_id ?? ""}
-                  className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                  className="h-9 rounded-xl border border-input bg-background px-2 text-sm"
                 >
                   <option value="">ไม่มีทีม</option>
                   {(teams ?? []).map((t) => (

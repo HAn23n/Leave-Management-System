@@ -57,7 +57,7 @@ export function ProfileTeamForm({
   return (
     <div className="flex flex-col gap-3">
       {disabled && (
-        <p className="rounded-md bg-accent px-3 py-2 text-sm text-accent-foreground">
+        <p className="rounded-xl bg-accent px-3 py-2 text-sm text-accent-foreground">
           ไม่สามารถเปลี่ยนทีมได้ เนื่องจากมีคำขอลาที่รออนุมัติหรืออนุมัติแล้วค้างอยู่
         </p>
       )}
@@ -66,7 +66,7 @@ export function ProfileTeamForm({
         value={selected}
         onChange={(e) => setSelected(e.target.value)}
         disabled={disabled || loading}
-        className="h-11 rounded-md border border-input bg-background px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+        className="h-11 rounded-xl border border-input bg-background px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50"
       >
         {teams.map((team) => (
           <option key={team.id} value={team.id}>

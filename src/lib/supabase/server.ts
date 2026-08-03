@@ -3,8 +3,8 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import type { Database } from "./types";
 
-// ใช้ anon key + cookie ของ user ที่ login อยู่ — RLS ยังบังคับใช้ตามปกติ
-// (ไม่ใช่ client สิทธิ์สูงสุด ใช้ใน Server Component / Route Handler ทั่วไป)
+// Uses the anon key + the logged-in user's cookies — RLS still applies as normal.
+// (Not an elevated-privilege client; use in regular Server Components / Route Handlers.)
 export function createServerSupabaseClient() {
   const cookieStore = cookies();
 
@@ -22,7 +22,7 @@ export function createServerSupabaseClient() {
               cookieStore.set(name, value, options)
             );
           } catch {
-            // เรียกจาก Server Component ที่ set cookie ไม่ได้ (ไม่เป็นไร มี middleware refresh session ให้)
+            // Called from a Server Component that can't set cookies — fine, middleware refreshes the session.
           }
         },
       },

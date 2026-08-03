@@ -1,6 +1,6 @@
 -- ============================================================================
--- ระบบบันทึกการลา (Leave Management System) — Initial schema
--- ทำก่อนเสมอ: ตาราง + RLS + functions + triggers + seed data
+-- Leave Management System — Initial schema
+-- Always run this first: tables + RLS + functions + triggers + seed data
 -- ============================================================================
 
 create extension if not exists "pgcrypto";
@@ -29,7 +29,7 @@ create table users (
 );
 create index idx_users_team_id on users(team_id);
 
--- หัวหน้าของแต่ละทีม ใช้ derive สายอนุมัติ
+-- Team lead(s) per team, used to derive the approval chain
 create table team_leads (
   id         uuid primary key default gen_random_uuid(),
   team_id    uuid not null references teams(id) on delete restrict,
@@ -38,7 +38,7 @@ create table team_leads (
   unique (team_id, user_id)
 );
 
--- ประวัติเปลี่ยนทีมของ user
+-- History of a user's team changes
 create table user_team_logs (
   id           uuid primary key default gen_random_uuid(),
   user_id      uuid not null references users(id) on delete restrict,
@@ -47,11 +47,11 @@ create table user_team_logs (
   changed_at   timestamptz not null default now()
 );
 
--- override สายอนุมัติกรณีพิเศษ (ปกติ derive จากทีม)
+-- Approval-chain override for special cases (normally derived from team)
 create table approver_mappings (
   id           uuid primary key default gen_random_uuid(),
-  user_id      uuid not null references users(id) on delete restrict,      -- ผู้ขอ
-  approver_id  uuid not null references users(id) on delete restrict,      -- ผู้อนุมัติ override
+  user_id      uuid not null references users(id) on delete restrict,      -- requester
+  approver_id  uuid not null references users(id) on delete restrict,      -- override approver
   created_at   timestamptz not null default now(),
   unique (user_id, approver_id)
 );
@@ -72,7 +72,7 @@ create table holidays (
   created_at   timestamptz not null default now()
 );
 
--- เตรียมไว้สำหรับโควตาการลา — ยังไม่ enforce ในระบบตอนนี้
+-- Reserved for leave quotas — not enforced by the system yet
 create table leave_balances (
   id            uuid primary key default gen_random_uuid(),
   user_id       uuid not null references users(id) on delete restrict,
@@ -85,7 +85,7 @@ create table leave_balances (
 
 create table leave_requests (
   id             uuid primary key default gen_random_uuid(),
-  request_no     text unique,                     -- gen อัตโนมัติตอน insert (trigger)
+  request_no     text unique,                     -- auto-generated on insert (trigger)
   user_id        uuid not null references users(id) on delete restrict,
   team_id        uuid not null references teams(id) on delete restrict,
   leave_type_id  uuid not null references leave_types(id) on delete restrict,
@@ -95,7 +95,7 @@ create table leave_requests (
   start_period   text not null default 'full' check (start_period in ('full', 'morning', 'afternoon')),
   end_period     text not null default 'full' check (end_period in ('full', 'morning', 'afternoon')),
 
-  total_days     numeric(4,1),                     -- freeze ตอน submit/approve เท่านั้น ไม่คำนวณใหม่อัตโนมัติ
+  total_days     numeric(4,1),                     -- frozen at submit/approve only, never recalculated after
   reason         text not null default '',
 
   status         text not null default 'draft'
@@ -115,7 +115,7 @@ create index idx_leave_requests_user_id on leave_requests(user_id);
 create index idx_leave_requests_team_status on leave_requests(team_id, status);
 create index idx_leave_requests_status on leave_requests(status);
 
--- document history — เขียนอัตโนมัติทุกครั้งที่ status เปลี่ยน (trigger)
+-- Document history — written automatically on every status change (trigger)
 create table leave_request_logs (
   id          uuid primary key default gen_random_uuid(),
   request_id  uuid not null references leave_requests(id) on delete cascade,
@@ -127,15 +127,16 @@ create table leave_request_logs (
 );
 create index idx_leave_request_logs_request_id on leave_request_logs(request_id);
 
--- ตัว counter สำหรับ gen เลขเอกสารแบบ atomic ต่อเดือน (YYYYMM)
+-- Per-month (YYYYMM) atomic counter used to generate document numbers
 create table doc_counters (
-  ym      text primary key,   -- 'YYYYMM' (ค.ศ.)
+  ym      text primary key,   -- 'YYYYMM' (Gregorian/CE)
   last_no int not null default 0
 );
 
 -- ============================================================================
--- 2. HELPER FUNCTIONS (SECURITY DEFINER, ใช้อ่าน role/team ของ auth.uid()
---    เพื่อเลี่ยง recursive RLS เวลาอ้างอิงตาราง users ในนโยบายของ users เอง)
+-- 2. HELPER FUNCTIONS (SECURITY DEFINER, read the caller's role/team via
+--    auth.uid() — avoids recursive RLS when the users table's own policies
+--    need to reference users)
 -- ============================================================================
 
 create or replace function auth_role() returns text
@@ -156,7 +157,8 @@ $$;
 -- 3. BUSINESS FUNCTIONS
 -- ============================================================================
 
--- คำนวณจำนวนวันลา: นับเฉพาะ จ.-ศ. ตัดวันใน holidays, อิงเวลาไทย, ครึ่งวัน = 0.5
+-- Calculates leave days: counts Mon-Fri only, excludes holidays, Bangkok-local
+-- business logic, half-day periods = 0.5
 create or replace function calc_total_days(
   p_start        date,
   p_end          date,
@@ -203,7 +205,8 @@ end;
 $$;
 grant execute on function calc_total_days(date, date, text, text) to authenticated;
 
--- gen เลขเอกสารแบบ atomic: ตาราง counter ต่อเดือน + FOR UPDATE (ห้ามใช้ COUNT(*)+1)
+-- Atomic document-number generation: per-month counter table + FOR UPDATE
+-- (never uses COUNT(*)+1, which would race under concurrent submissions)
 create or replace function gen_request_no(p_date date default current_date) returns text
 language plpgsql
 security definer
@@ -223,7 +226,8 @@ begin
    where ym = v_ym
   returning last_no into v_next;
 
-  -- รองรับเกิน 999: ใช้ความยาวขั้นต่ำ 3 หลัก แต่ไม่ error ถ้าเกิน (lpad ไม่ตัดทอนตัวเลขที่ยาวกว่า)
+  -- Supports going past 999: pads to a minimum of 3 digits but never errors past it
+  -- (lpad doesn't truncate numbers that are already longer than the target width)
   return v_ym || lpad(v_next::text, 3, '0');
 end;
 $$;
@@ -248,7 +252,8 @@ create trigger trg_leave_requests_updated_at
   before update on leave_requests
   for each row execute function set_updated_at();
 
--- role / is_active ของ users แก้ได้เฉพาะ admin (user แก้ได้แค่ team_id/full_name ของตัวเอง)
+-- role / is_active on users can only be changed by an admin (a regular user
+-- may only update their own team_id/full_name)
 create or replace function guard_users_privileged_fields() returns trigger
 language plpgsql as $$
 begin
@@ -264,7 +269,8 @@ create trigger trg_users_guard_privileged
   before update on users
   for each row execute function guard_users_privileged_fields();
 
--- ห้ามเปลี่ยนทีมถ้ามีคำขอลา pending/approved ค้างอยู่, และบันทึกทุกการเปลี่ยนทีมลง user_team_logs
+-- Blocks a team change while a pending/approved leave request exists, and
+-- logs every team change into user_team_logs
 create or replace function guard_and_log_team_change() returns trigger
 language plpgsql
 security definer
@@ -290,7 +296,7 @@ create trigger trg_users_guard_team_change
   before update on users
   for each row execute function guard_and_log_team_change();
 
--- gen request_no อัตโนมัติตอนสร้างเอกสารใหม่ (ยึดเดือนที่สร้าง)
+-- Auto-generates request_no when a new document is created (month it was created in)
 create or replace function set_request_no() returns trigger
 language plpgsql
 security definer
@@ -308,7 +314,7 @@ create trigger trg_leave_requests_set_request_no
   before insert on leave_requests
   for each row execute function set_request_no();
 
--- กันการลาซ้อนทับ (overlap) กับคำขอสถานะ pending/approved ของ user เดียวกัน
+-- Prevents overlapping leave (pending/approved) for the same user
 create or replace function check_leave_overlap() returns trigger
 language plpgsql as $$
 begin
@@ -332,7 +338,7 @@ create trigger trg_a_leave_requests_overlap
   before insert or update on leave_requests
   for each row execute function check_leave_overlap();
 
--- freeze total_days ตอน submit/approve (snapshot ครั้งเดียว ไม่คำนวณใหม่ทีหลัง)
+-- Freezes total_days at submit/approve time (a one-time snapshot, never recalculated later)
 create or replace function freeze_total_days() returns trigger
 language plpgsql as $$
 begin
@@ -355,7 +361,7 @@ create trigger trg_b_leave_requests_freeze
   before update on leave_requests
   for each row execute function freeze_total_days();
 
--- document history: เขียน leave_request_logs ทุกครั้งที่สร้างเอกสาร/เปลี่ยนสถานะ
+-- Document history: writes to leave_request_logs on every create/status change
 create or replace function log_leave_request_status_change() returns trigger
 language plpgsql
 security definer
@@ -393,56 +399,58 @@ alter table holidays enable row level security;
 alter table leave_balances enable row level security;
 alter table leave_requests enable row level security;
 alter table leave_request_logs enable row level security;
-alter table doc_counters enable row level security;   -- ไม่มี policy = client แตะไม่ได้เลย เข้าผ่าน SECURITY DEFINER function เท่านั้น
+alter table doc_counters enable row level security;   -- no policy = totally inaccessible to clients; only the SECURITY DEFINER function touches it
 
--- teams: อ่านได้ทุกคนที่ login แล้ว (ต้องเลือกทีมตอน onboarding), แก้ได้เฉพาะ admin
+-- teams: readable by anyone logged in (needed to pick a team during onboarding), writable by admin only
 create policy teams_select on teams for select to authenticated using (true);
 create policy teams_write_admin on teams for insert to authenticated with check (auth_role() = 'admin');
 create policy teams_update_admin on teams for update to authenticated using (auth_role() = 'admin') with check (auth_role() = 'admin');
 
--- users: เห็นตัวเอง / approver เห็นทีมตัวเอง / admin เห็นหมด
+-- users: sees self / approver sees own team / admin sees everyone
 create policy users_select on users for select to authenticated
   using (id = auth.uid() or auth_role() = 'admin' or (auth_role() = 'approver' and team_id = auth_team_id()));
 
--- กัน privilege escalation: self-insert (สร้าง record ตอน login ครั้งแรก) ต้องเป็น role='user'
--- และ is_active=true เท่านั้น ห้าม client ตั้งตัวเองเป็น admin/approver ตอนสมัคร
+-- Blocks privilege escalation: the self-insert (row created on first login)
+-- must have role='user' and is_active=true — a client can never sign itself
+-- up as admin/approver
 create policy users_insert_self on users for insert to authenticated
   with check (id = auth.uid() and role = 'user' and is_active = true);
 
--- update: เจ้าของแก้ข้อมูลตัวเอง (role/is_active ถูกกันด้วย trigger ด้านบน) หรือ admin แก้ใครก็ได้
+-- update: the owner can edit their own row (role/is_active are blocked by the
+-- trigger above), or an admin can edit anyone's
 create policy users_update_self on users for update to authenticated
   using (id = auth.uid() or auth_role() = 'admin')
   with check (id = auth.uid() or auth_role() = 'admin');
 
--- team_leads: อ่านได้ทุกคน (ใช้ derive สายอนุมัติ), เขียนได้เฉพาะ admin
+-- team_leads: readable by everyone (used to derive the approval chain), writable by admin only
 create policy team_leads_select on team_leads for select to authenticated using (true);
 create policy team_leads_insert_admin on team_leads for insert to authenticated with check (auth_role() = 'admin');
 create policy team_leads_update_admin on team_leads for update to authenticated using (auth_role() = 'admin') with check (auth_role() = 'admin');
 create policy team_leads_delete_admin on team_leads for delete to authenticated using (auth_role() = 'admin');
 
--- user_team_logs: เจ้าของอ่าน log ตัวเอง, admin อ่านหมด, insert ทำผ่าน API (service role) เท่านั้น
+-- user_team_logs: owner reads their own log, admin reads all, inserts only happen via the trigger
 create policy user_team_logs_select on user_team_logs for select to authenticated
   using (user_id = auth.uid() or auth_role() = 'admin');
 
--- approver_mappings: admin จัดการ, user/approver ที่เกี่ยวข้องอ่านได้
+-- approver_mappings: admin manages them, the involved requester/approver can read
 create policy approver_mappings_select on approver_mappings for select to authenticated
   using (user_id = auth.uid() or approver_id = auth.uid() or auth_role() = 'admin');
 create policy approver_mappings_write_admin on approver_mappings for insert to authenticated with check (auth_role() = 'admin');
 create policy approver_mappings_update_admin on approver_mappings for update to authenticated using (auth_role() = 'admin') with check (auth_role() = 'admin');
 create policy approver_mappings_delete_admin on approver_mappings for delete to authenticated using (auth_role() = 'admin');
 
--- leave_types: อ่านได้ทุกคน, เขียนได้เฉพาะ admin (soft delete ผ่าน update is_active)
+-- leave_types: readable by everyone, writable by admin only (soft delete via is_active)
 create policy leave_types_select on leave_types for select to authenticated using (true);
 create policy leave_types_insert_admin on leave_types for insert to authenticated with check (auth_role() = 'admin');
 create policy leave_types_update_admin on leave_types for update to authenticated using (auth_role() = 'admin') with check (auth_role() = 'admin');
 
--- holidays: อ่านได้ทุกคน, เขียนได้เฉพาะ admin
+-- holidays: readable by everyone, writable by admin only
 create policy holidays_select on holidays for select to authenticated using (true);
 create policy holidays_insert_admin on holidays for insert to authenticated with check (auth_role() = 'admin');
 create policy holidays_update_admin on holidays for update to authenticated using (auth_role() = 'admin') with check (auth_role() = 'admin');
 create policy holidays_delete_admin on holidays for delete to authenticated using (auth_role() = 'admin');
 
--- leave_balances: เจ้าของอ่านของตัวเอง, approver อ่านทีม, admin จัดการทั้งหมด (ยังไม่ enforce การใช้งานจริง)
+-- leave_balances: owner reads their own, approver reads their team, admin manages everything (not enforced in the app yet)
 create policy leave_balances_select on leave_balances for select to authenticated
   using (
     user_id = auth.uid()
@@ -452,7 +460,7 @@ create policy leave_balances_select on leave_balances for select to authenticate
 create policy leave_balances_write_admin on leave_balances for insert to authenticated with check (auth_role() = 'admin');
 create policy leave_balances_update_admin on leave_balances for update to authenticated using (auth_role() = 'admin') with check (auth_role() = 'admin');
 
--- leave_requests: หัวใจของระบบ — scope ตาม role ที่ระดับ DB
+-- leave_requests: the core of the system — scoped by role at the DB level
 create policy leave_requests_select on leave_requests for select to authenticated
   using (
     user_id = auth.uid()
@@ -460,19 +468,22 @@ create policy leave_requests_select on leave_requests for select to authenticate
     or (auth_role() = 'approver' and team_id = auth_team_id())
   );
 
--- insert ใหม่ต้องเป็น draft เสมอ (แม้ approver ขอลาเอง ก็สร้างเป็น draft ก่อน
--- แล้วค่อย update ไป approved ในขั้นถัดไปผ่าน leave_requests_update_approver policy)
+-- New inserts must always be 'draft' (even when an approver files their own
+-- leave, it's still created as draft first, then updated to approved via the
+-- leave_requests_update_approver policy in the next step)
 create policy leave_requests_insert_own on leave_requests for insert to authenticated
   with check (user_id = auth.uid() and team_id = auth_team_id() and status = 'draft');
 
--- เจ้าของแก้ได้เฉพาะตอน draft/returned/pending (แก้ไขก่อนอนุมัติ, ส่งอนุมัติ, หรือยกเลิก)
--- WITH CHECK จำกัดปลายทางสถานะไว้ที่ draft/pending/cancelled เท่านั้น — ห้าม user ตั้งสถานะ
--- approved/rejected/returned ให้ตัวเอง (ต้องผ่าน policy ของ approver/admin เท่านั้น)
+-- The owner may only edit while draft/returned/pending (editing before
+-- approval, submitting, or cancelling). WITH CHECK restricts the resulting
+-- status to draft/pending/cancelled only — a plain user can never set their
+-- own request to approved/rejected/returned (only the approver/admin
+-- policies below allow that)
 create policy leave_requests_update_own on leave_requests for update to authenticated
   using (user_id = auth.uid() and status in ('draft', 'returned', 'pending'))
   with check (user_id = auth.uid() and status in ('draft', 'pending', 'cancelled'));
 
--- approver แก้ (อนุมัติ/ไม่อนุมัติ/ส่งคืน) คำขอในทีมตัวเองได้
+-- An approver can act (approve/reject/return) on requests within their own team
 create policy leave_requests_update_approver on leave_requests for update to authenticated
   using (auth_role() = 'approver' and team_id = auth_team_id())
   with check (auth_role() = 'approver' and team_id = auth_team_id());
@@ -481,7 +492,7 @@ create policy leave_requests_update_admin on leave_requests for update to authen
   using (auth_role() = 'admin')
   with check (auth_role() = 'admin');
 
--- leave_request_logs: อ่านได้ตาม scope เดียวกับ leave_requests ที่อ้างอิง, เขียนได้เฉพาะ trigger (SECURITY DEFINER)
+-- leave_request_logs: readable with the same scope as the leave_requests row it references, writable only by the trigger (SECURITY DEFINER)
 create policy leave_request_logs_select on leave_request_logs for select to authenticated
   using (
     exists (
@@ -496,7 +507,8 @@ create policy leave_request_logs_select on leave_request_logs for select to auth
   );
 
 -- ============================================================================
--- 6. GRANTS (RLS จำกัด "แถวไหน" เห็นได้ แต่ต้อง grant สิทธิ์ระดับตาราง/คอลัมน์ด้วย)
+-- 6. GRANTS (RLS restricts *which rows* are visible, but table/column-level
+--    privileges still need to be granted separately)
 -- ============================================================================
 
 grant usage on schema public to authenticated;
@@ -504,7 +516,7 @@ grant select, insert, update on
   teams, users, team_leads, user_team_logs, approver_mappings,
   leave_types, holidays, leave_balances, leave_requests, leave_request_logs
   to authenticated;
--- doc_counters: ไม่ grant ให้ authenticated เลย เข้าถึงผ่าน SECURITY DEFINER function เท่านั้น
+-- doc_counters: intentionally not granted to authenticated at all — only reachable via the SECURITY DEFINER function
 
 -- ============================================================================
 -- 7. SEED DATA
@@ -517,10 +529,11 @@ insert into leave_types (name, color) values
   ('ลากิจ', '#2563eb'),
   ('ลาพักร้อน', '#16a34a');
 
--- วันหยุดนักขัตฤกษ์ไทย 2026 — เฉพาะวันหยุดที่วันที่คงที่ทุกปี (แน่นอน)
--- วันหยุดทางพุทธศาสนา (มาฆบูชา/วิสาขบูชา/อาสาฬหบูชา/เข้าพรรษา) และวันหยุดชดเชย
--- เปลี่ยนวันที่ทุกปีตามจันทรคติ/ประกาศคณะรัฐมนตรี — ให้ admin เพิ่มเองผ่านหน้า Settings
--- หลังยืนยันวันที่จริงจากราชกิจจานุเบกษา (source = 'manual')
+-- Thai public holidays for 2026 — fixed-date holidays only (these don't move year to year).
+-- Buddhist lunar holidays (Makha Bucha / Visakha Bucha / Asalha Bucha / Buddhist
+-- Lent) and any substitution days shift every year per the lunar calendar and
+-- cabinet resolution — admin should add those via Settings once the official
+-- date is confirmed (source = 'manual').
 insert into holidays (holiday_date, name, source) values
   ('2026-01-01', 'วันขึ้นปีใหม่', 'seed'),
   ('2026-04-06', 'วันจักรี', 'seed'),

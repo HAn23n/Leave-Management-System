@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { AppUser } from "@/lib/supabase/types";
 
-/** ผู้ใช้ปัจจุบัน (auth + record ในตาราง users) หรือ null ถ้ายังไม่ login / ยังไม่มี record */
+/** Current user (auth + row in the users table), or null if not logged in / no row yet. */
 export async function getCurrentAppUser(): Promise<AppUser | null> {
   const supabase = createServerSupabaseClient();
   const {
@@ -22,10 +22,11 @@ export async function getCurrentAppUser(): Promise<AppUser | null> {
 }
 
 /**
- * ใช้ใน Server Component ของหน้าที่ต้อง login แล้วเท่านั้น
- * - ไม่ login -> เด้งไป /login
- * - login แล้วแต่ยังไม่มี record users (ไม่ควรเกิดขึ้น ปกติสร้างที่ /auth/callback) -> เด้งไป /login
- * - team_id ยัง null -> เด้งไปเลือกทีมก่อน (ยกเว้นหน้า onboarding เอง)
+ * Use in Server Components of pages that require an authenticated user.
+ * - Not logged in -> redirect to /login
+ * - Logged in but no users row yet (shouldn't happen, normally created in
+ *   /auth/callback) -> redirect to /login
+ * - team_id still null -> redirect to team selection (unless allowNoTeam)
  */
 export async function requireAppUser(options?: { allowNoTeam?: boolean }): Promise<AppUser> {
   const appUser = await getCurrentAppUser();

@@ -1,7 +1,7 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-// refresh session cookie ทุก request (จำเป็นสำหรับ Supabase SSR auth)
+// Refreshes the session cookie on every request (required for Supabase SSR auth).
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({ request });
 

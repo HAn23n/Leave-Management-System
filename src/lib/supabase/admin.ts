@@ -2,8 +2,8 @@ import "server-only";
 import { createClient } from "@supabase/supabase-js";
 import type { Database } from "./types";
 
-// สิทธิ์สูงสุด (bypass RLS) — ใช้เฉพาะใน API route handler ฝั่ง server เท่านั้น
-// ห้าม import ไฟล์นี้จาก client component เด็ดขาด ("server-only" จะทำให้ build พังถ้าเผลอ import ผิดที่)
+// Elevated privilege client (bypasses RLS) — server-side API route handlers only.
+// Never import this from a client component; "server-only" will break the build if you do.
 export function createAdminSupabaseClient() {
   return createClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

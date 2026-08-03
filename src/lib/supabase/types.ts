@@ -104,9 +104,10 @@ export interface LeaveRequestLog {
   created_at: string;
 }
 
-// อินเทอร์เฟซ (ไม่มี index signature) ไม่ extends Record<string, unknown> ตรงๆ ตามกฎ TS
-// intersect กับ Record<string, unknown> เพื่อให้ผ่าน GenericSchema constraint ของ supabase-js
-// โดยไม่กระทบ field types เดิมที่ใช้ทั่วแอป
+// Plain interfaces (no index signature) don't structurally extend
+// Record<string, unknown> under TS's rules. Intersecting with it here satisfies
+// supabase-js's GenericSchema constraint without changing the field types used
+// elsewhere in the app.
 type Table<Row extends object> = {
   Row: Row & Record<string, unknown>;
   Insert: Partial<Row> & Record<string, unknown>;

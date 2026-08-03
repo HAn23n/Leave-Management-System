@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ธีมขาว-แดง ของระบบบันทึกการลา */
+/* Red/white theme for the Leave Management System */
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -14,7 +14,7 @@
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 9%;
 
-    /* แดงหลัก */
+    /* primary red */
     --primary: 0 72% 45%;
     --primary-foreground: 0 0% 100%;
 

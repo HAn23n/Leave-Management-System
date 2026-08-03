@@ -1,7 +1,6 @@
 import { requireAppUser } from "@/lib/auth";
 
-// Layout สำหรับหน้าที่ต้อง login แล้วเท่านั้น (มีทีมแล้วด้วย)
-// เนื้อหา nav/bottom-tab/sidebar จะเพิ่มในขั้น "layout + PWA" ถัดไป
+// Layout for pages that require an authenticated user with a team assigned.
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   await requireAppUser();
 

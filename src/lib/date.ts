@@ -5,8 +5,8 @@ export const BANGKOK_TZ = "Asia/Bangkok";
 const THAI_YEAR_OFFSET = 543;
 
 /**
- * แปลงวันที่ ค.ศ. (จาก DB, format 'yyyy-MM-dd' หรือ Date) เป็นข้อความ พ.ศ. สำหรับแสดงผล
- * เช่น '2026-08-03' -> '3 ส.ค. 2569'
+ * Formats a Gregorian (CE) date (from the DB, 'yyyy-MM-dd' string or Date) as a
+ * Buddhist Era (BE) display string. E.g. '2026-08-03' -> '3 ส.ค. 2569'.
  */
 export function formatThaiDate(
   dateInput: string | Date,
@@ -40,8 +40,10 @@ export function formatThaiDate(
 }
 
 /**
- * แปลงวันที่ พ.ศ. จาก date picker/input กลับเป็น ค.ศ. (format 'yyyy-MM-dd') ก่อนบันทึกลง DB
- * รับ input เป็น Date ที่ year เป็น พ.ศ. อยู่แล้ว (เช่น date picker แสดง พ.ศ.) หรือปี ค.ศ. ปกติจาก <input type="date">
+ * Converts a Buddhist Era (BE) date from a date picker/input back to Gregorian
+ * (CE, 'yyyy-MM-dd') before saving to the DB. Accepts a Date whose year is
+ * already BE (e.g. a date picker displaying BE), or set sourceIsBuddhistYear
+ * to false for a plain CE year from <input type="date">.
  */
 export function parseThaiDate(dateInput: Date, sourceIsBuddhistYear = false): string {
   const year = sourceIsBuddhistYear
@@ -63,9 +65,9 @@ export function todayIso(): string {
 export type LeavePeriodClient = "full" | "morning" | "afternoon";
 
 /**
- * คำนวณจำนวนวันลาฝั่ง client สำหรับ preview realtime ในฟอร์ม
- * ตรรกะเดียวกับ calc_total_days() ใน SQL migration — ต้องแก้พร้อมกันถ้าจะเปลี่ยน
- * holidayDates: array ของวันที่ 'yyyy-MM-dd' (ค.ศ.) จากตาราง holidays
+ * Client-side leave day calculation for realtime form preview.
+ * Same logic as calc_total_days() in the SQL migration — keep both in sync.
+ * holidayDates: array of 'yyyy-MM-dd' (CE) dates from the holidays table.
  */
 export function calcTotalDaysClient(
   startDate: string,

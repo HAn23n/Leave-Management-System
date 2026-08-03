@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
 
   const authUser = data.user;
 
-  // login ครั้งแรก -> สร้าง record ใน users (RLS: role/is_active ถูกบังคับเป็น 'user'/true เสมอ กัน privilege escalation)
+  // First login -> create the users row (RLS forces role='user'/is_active=true, blocking privilege escalation)
   const { data: existing } = await supabase
     .from("users")
     .select("id, team_id, is_active")

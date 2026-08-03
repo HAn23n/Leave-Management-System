@@ -38,7 +38,7 @@ export function ProfileTeamForm({
     const { error } = await supabase.from("users").update({ team_id: selected }).eq("id", user.id);
 
     if (error) {
-      // ข้อความจาก DB trigger เมื่อมีคำขอลา pending/approved ค้างอยู่
+      // Message from the DB trigger when a pending/approved request is blocking the change
       setMessage({
         type: "error",
         text: error.message.includes("รออนุมัติ")

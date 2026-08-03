@@ -104,19 +104,33 @@ export interface LeaveRequestLog {
   created_at: string;
 }
 
+// อินเทอร์เฟซ (ไม่มี index signature) ไม่ extends Record<string, unknown> ตรงๆ ตามกฎ TS
+// intersect กับ Record<string, unknown> เพื่อให้ผ่าน GenericSchema constraint ของ supabase-js
+// โดยไม่กระทบ field types เดิมที่ใช้ทั่วแอป
+type Table<Row extends object> = {
+  Row: Row & Record<string, unknown>;
+  Insert: Partial<Row> & Record<string, unknown>;
+  Update: Partial<Row> & Record<string, unknown>;
+  Relationships: [];
+};
+
 export interface Database {
   public: {
     Tables: {
-      teams: { Row: Team; Insert: Partial<Team>; Update: Partial<Team> };
-      users: { Row: AppUser; Insert: Partial<AppUser>; Update: Partial<AppUser> };
-      team_leads: { Row: TeamLead; Insert: Partial<TeamLead>; Update: Partial<TeamLead> };
-      user_team_logs: { Row: UserTeamLog; Insert: Partial<UserTeamLog>; Update: Partial<UserTeamLog> };
-      approver_mappings: { Row: ApproverMapping; Insert: Partial<ApproverMapping>; Update: Partial<ApproverMapping> };
-      leave_types: { Row: LeaveType; Insert: Partial<LeaveType>; Update: Partial<LeaveType> };
-      holidays: { Row: Holiday; Insert: Partial<Holiday>; Update: Partial<Holiday> };
-      leave_balances: { Row: LeaveBalance; Insert: Partial<LeaveBalance>; Update: Partial<LeaveBalance> };
-      leave_requests: { Row: LeaveRequest; Insert: Partial<LeaveRequest>; Update: Partial<LeaveRequest> };
-      leave_request_logs: { Row: LeaveRequestLog; Insert: Partial<LeaveRequestLog>; Update: Partial<LeaveRequestLog> };
+      teams: Table<Team>;
+      users: Table<AppUser>;
+      team_leads: Table<TeamLead>;
+      user_team_logs: Table<UserTeamLog>;
+      approver_mappings: Table<ApproverMapping>;
+      leave_types: Table<LeaveType>;
+      holidays: Table<Holiday>;
+      leave_balances: Table<LeaveBalance>;
+      leave_requests: Table<LeaveRequest>;
+      leave_request_logs: Table<LeaveRequestLog>;
     };
+    Views: Record<string, never>;
+    Functions: Record<string, never>;
+    Enums: Record<string, never>;
+    CompositeTypes: Record<string, never>;
   };
 }

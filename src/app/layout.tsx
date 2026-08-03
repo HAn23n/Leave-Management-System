@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Noto_Sans_Thai } from "next/font/google";
+import { ServiceWorkerRegister } from "@/components/sw-register";
 import "./globals.css";
 
 const notoSansThai = Noto_Sans_Thai({
@@ -39,6 +40,7 @@ export default function RootLayout({
     <html lang="th" className={`${notoSansThai.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col bg-background text-foreground">
         {children}
+        <ServiceWorkerRegister />
       </body>
     </html>
   );

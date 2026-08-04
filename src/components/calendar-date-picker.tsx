@@ -21,6 +21,12 @@ function toIso(year: number, month: number, day: number): string {
   return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
+// Aligns the 12-year picker grid to a fixed page (e.g. 2020-2031,
+// 2032-2043, ...) so paging forward/back always lands on the same boundaries.
+function yearsPageStart(year: number): number {
+  return Math.floor(year / 12) * 12;
+}
+
 /**
  * Popover calendar ("scheduler") date picker. Shows Buddhist Era in the
  * header and highlights holidays in-grid so the user can see conflicts
@@ -51,6 +57,7 @@ export function CalendarDatePicker({
   occupiedDates?: Map<string, DayOccupancy>;
 }) {
   const [open, setOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<"days" | "months" | "years">("days");
   const containerRef = useRef<HTMLDivElement>(null);
 
   const selected = value ? new Date(`${value}T00:00:00`) : new Date();
@@ -62,6 +69,7 @@ export function CalendarDatePicker({
     const base = value ? new Date(`${value}T00:00:00`) : new Date();
     setViewYear(base.getFullYear());
     setViewMonth(base.getMonth());
+    setViewMode("days");
   }, [open, value]);
 
   useEffect(() => {
@@ -125,25 +133,86 @@ export function CalendarDatePicker({
           <div className="flex items-center justify-between pb-2">
             <button
               type="button"
-              onClick={() => goMonth(-1)}
+              onClick={() => {
+                if (viewMode === "days") goMonth(-1);
+                else if (viewMode === "months") setViewYear((y) => y - 1);
+                else setViewYear((y) => y - 12);
+              }}
               className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-              aria-label="เดือนก่อนหน้า"
+              aria-label="ก่อนหน้า"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <span className="text-sm font-semibold text-foreground">
-              {MONTH_NAMES[viewMonth]} {viewYear + THAI_YEAR_OFFSET}
-            </span>
+
             <button
               type="button"
-              onClick={() => goMonth(1)}
+              onClick={() => setViewMode(viewMode === "days" ? "months" : viewMode === "months" ? "years" : "days")}
+              className="rounded-lg px-2 py-1 text-sm font-semibold text-foreground transition-colors hover:bg-accent"
+            >
+              {viewMode === "days" && `${MONTH_NAMES[viewMonth]} ${viewYear + THAI_YEAR_OFFSET}`}
+              {viewMode === "months" && `${viewYear + THAI_YEAR_OFFSET}`}
+              {viewMode === "years" &&
+                `${yearsPageStart(viewYear) + THAI_YEAR_OFFSET}–${yearsPageStart(viewYear) + 11 + THAI_YEAR_OFFSET}`}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (viewMode === "days") goMonth(1);
+                else if (viewMode === "months") setViewYear((y) => y + 1);
+                else setViewYear((y) => y + 12);
+              }}
               className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-              aria-label="เดือนถัดไป"
+              aria-label="ถัดไป"
             >
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
 
+          {viewMode === "months" && (
+            <div className="grid grid-cols-3 gap-1.5">
+              {MONTH_NAMES.map((name, i) => (
+                <button
+                  key={name}
+                  type="button"
+                  onClick={() => {
+                    setViewMonth(i);
+                    setViewMode("days");
+                  }}
+                  className={cn(
+                    "rounded-lg py-2 text-xs font-medium transition-colors hover:bg-accent",
+                    i === viewMonth ? "gradient-primary text-primary-foreground" : "text-foreground"
+                  )}
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {viewMode === "years" && (
+            <div className="grid grid-cols-3 gap-1.5">
+              {Array.from({ length: 12 }, (_, i) => yearsPageStart(viewYear) + i).map((y) => (
+                <button
+                  key={y}
+                  type="button"
+                  onClick={() => {
+                    setViewYear(y);
+                    setViewMode("months");
+                  }}
+                  className={cn(
+                    "rounded-lg py-2 text-xs font-medium transition-colors hover:bg-accent",
+                    y === viewYear ? "gradient-primary text-primary-foreground" : "text-foreground"
+                  )}
+                >
+                  {y + THAI_YEAR_OFFSET}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {viewMode === "days" && (
+          <>
           <div className="grid grid-cols-7 gap-1 text-center text-xs">
             {WEEKDAY_LABELS.map((w, i) => (
               <div key={w} className={cn("py-1", i === 0 || i === 6 ? "text-primary/70" : "text-muted-foreground")}>
@@ -222,6 +291,8 @@ export function CalendarDatePicker({
               </div>
             );
           })()}
+          </>
+          )}
         </div>
       )}
     </div>

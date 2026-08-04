@@ -91,20 +91,28 @@ export function LeaveRequestActions({
           <Button disabled={busy} onClick={() => post("approve")}>
             อนุมัติ
           </Button>
-          <Button
-            disabled={busy}
-            variant="outline"
-            onClick={() => setNoteAction(noteAction === "return" ? null : "return")}
-          >
-            ส่งคืน
-          </Button>
-          <Button
-            disabled={busy}
-            variant="destructive"
-            onClick={() => setNoteAction(noteAction === "reject" ? null : "reject")}
-          >
-            ไม่อนุมัติ
-          </Button>
+          {/* Reject/return are secondary to approve — grouped side-by-side and
+              lighter-weight instead of two more full-width stacked buttons. */}
+          <div className="flex gap-2">
+            <Button
+              disabled={busy}
+              variant="outline"
+              size="sm"
+              className="flex-1"
+              onClick={() => setNoteAction(noteAction === "return" ? null : "return")}
+            >
+              ส่งคืน
+            </Button>
+            <Button
+              disabled={busy}
+              variant="ghost"
+              size="sm"
+              className="flex-1 text-destructive hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => setNoteAction(noteAction === "reject" ? null : "reject")}
+            >
+              ไม่อนุมัติ
+            </Button>
+          </div>
         </>
       )}
 

@@ -135,7 +135,7 @@ export default async function LeaveRequestsSearchPage({
         {(requests ?? []).map((r) => (
           <Link
             key={r.id}
-            href={`/leave-requests/${r.id}`}
+            href={`/leave-requests/${r.request_no ?? r.id}`}
             className="flex flex-col gap-1 rounded-2xl border border-border bg-white p-4 shadow-sm shadow-black/[0.02] transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md"
           >
             <div className="flex items-center justify-between">

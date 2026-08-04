@@ -10,7 +10,7 @@ export const leaveRequestInputSchema = z
     end_date: isoDate,
     start_period: period,
     end_period: period,
-    reason: z.string().trim().min(1, "กรุณาระบุเหตุผล").max(1000),
+    reason: z.string().trim().max(1000).optional().default(""),
   })
   .refine((v) => v.end_date >= v.start_date, {
     message: "วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่ม",

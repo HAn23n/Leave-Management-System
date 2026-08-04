@@ -115,7 +115,7 @@ export async function decideOnPendingRequest({
         decision,
         approverName: actor.full_name,
         approverNote: note,
-        requestUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/leave-requests/${requestRow.id}`,
+        requestUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/leave-requests/${requestRow.request_no}`,
       });
     }
   } catch {

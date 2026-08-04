@@ -28,10 +28,10 @@ const toastVariants = cva(
   {
     variants: {
       variant: {
-        default: "border-l-primary",
-        success: "border-l-emerald-500 bg-emerald-50",
-        warning: "border-l-amber-500 bg-amber-50",
-        destructive: "border-l-destructive bg-red-50",
+        default: "border-l-primary text-foreground",
+        success: "border-l-emerald-500 bg-emerald-50 text-emerald-900",
+        warning: "border-l-amber-500 bg-amber-50 text-amber-900",
+        destructive: "border-l-destructive bg-red-50 text-red-900",
       },
     },
     defaultVariants: { variant: "default" },
@@ -53,7 +53,7 @@ const ToastClose = React.forwardRef<
   <ToastPrimitives.Close
     ref={ref}
     className={cn(
-      "shrink-0 rounded-md p-1 text-muted-foreground/70 transition-colors hover:text-foreground",
+      "shrink-0 rounded-md p-1 text-current opacity-60 transition-opacity hover:opacity-100",
       className
     )}
     {...props}
@@ -67,7 +67,7 @@ const ToastTitle = React.forwardRef<
   React.ElementRef<typeof ToastPrimitives.Title>,
   React.ComponentPropsWithoutRef<typeof ToastPrimitives.Title>
 >(({ className, ...props }, ref) => (
-  <ToastPrimitives.Title ref={ref} className={cn("text-sm font-semibold text-foreground", className)} {...props} />
+  <ToastPrimitives.Title ref={ref} className={cn("text-sm font-bold", className)} {...props} />
 ));
 ToastTitle.displayName = ToastPrimitives.Title.displayName;
 
@@ -77,7 +77,7 @@ const ToastDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <ToastPrimitives.Description
     ref={ref}
-    className={cn("mt-0.5 text-xs text-muted-foreground", className)}
+    className={cn("mt-0.5 text-sm opacity-90", className)}
     {...props}
   />
 ));

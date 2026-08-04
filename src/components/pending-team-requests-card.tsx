@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 
 export interface PendingTeamRequestRow {
   id: string;
+  request_no: string | null;
   user_id: string;
   leave_type_id: string;
   start_date: string;
@@ -34,7 +35,7 @@ export function PendingTeamRequestsCard({
         {requests.map((r) => (
           <Link
             key={r.id}
-            href={`/leave-requests/${r.id}`}
+            href={`/leave-requests/${r.request_no ?? r.id}`}
             className="flex items-center justify-between rounded-xl border border-border p-3 transition-colors hover:border-primary/30 hover:bg-accent/40"
           >
             <div>

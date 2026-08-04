@@ -1,15 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarDatePicker } from "@/components/calendar-date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { calcTotalDaysClient, todayIso, type LeavePeriodClient } from "@/lib/date";
 import { buildOccupiedDates, type ExistingLeaveRange } from "@/lib/leave-overlap";
 import { toast } from "@/hooks/use-toast";
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import type { LeaveRequest, LeaveType, UserRole } from "@/lib/supabase/types";
 
 const PERIOD_OPTIONS: { value: LeavePeriodClient; label: string }[] = [
@@ -48,6 +50,20 @@ export function LeaveRequestForm({
   const [reason, setReason] = useState(existing?.reason ?? "");
   const [submitting, setSubmitting] = useState<"draft" | "submit" | "approve" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [dirty, setDirty] = useState(false);
+
+  // Any field changing after the initial mount marks the form dirty; saving
+  // resets it (see setDirty(false) in the handlers below).
+  const mounted = useRef(false);
+  useEffect(() => {
+    if (mounted.current) {
+      setDirty(true);
+    } else {
+      mounted.current = true;
+    }
+  }, [leaveTypeId, startDate, endDate, startPeriod, endPeriod, reason]);
+
+  const { confirmOpen, confirmLeave, cancelLeave } = useUnsavedChangesGuard(dirty && !submitting);
 
   const isSingleDay = startDate === endDate;
   const canApproveOwn = currentUserRole === "approver" || currentUserRole === "admin";
@@ -67,7 +83,7 @@ export function LeaveRequestForm({
     setEndPeriod(p);
   }
 
-  async function saveDraftOrUpdate(): Promise<string | null> {
+  async function saveDraftOrUpdate(): Promise<{ id: string; requestNo: string } | null> {
     const payload = {
       leave_type_id: leaveTypeId,
       start_date: startDate,
@@ -98,17 +114,18 @@ export function LeaveRequestForm({
       toast({ variant: "destructive", title: "บันทึกไม่สำเร็จ", description: message });
       return null;
     }
-    return body.request.id as string;
+    return { id: body.request.id as string, requestNo: (body.request.request_no ?? body.request.id) as string };
   }
 
   async function handleSaveDraft() {
     setSubmitting("draft");
     setError(null);
-    const id = await saveDraftOrUpdate();
+    const saved = await saveDraftOrUpdate();
     setSubmitting(null);
-    if (id) {
+    if (saved) {
+      setDirty(false);
       toast({ variant: "success", title: "บันทึกร่างแล้ว" });
-      router.push(`/leave-requests/${id}`);
+      router.push(`/leave-requests/${saved.requestNo}`);
       router.refresh();
     }
   }
@@ -116,12 +133,12 @@ export function LeaveRequestForm({
   async function handleSubmitForApproval() {
     setSubmitting("submit");
     setError(null);
-    const id = await saveDraftOrUpdate();
-    if (!id) {
+    const saved = await saveDraftOrUpdate();
+    if (!saved) {
       setSubmitting(null);
       return;
     }
-    const res = await fetch(`/api/leave-requests/${id}/submit`, { method: "POST" });
+    const res = await fetch(`/api/leave-requests/${saved.id}/submit`, { method: "POST" });
     setSubmitting(null);
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
@@ -130,20 +147,21 @@ export function LeaveRequestForm({
       toast({ variant: body.error === "db_error" ? "warning" : "destructive", title: "ส่งอนุมัติไม่สำเร็จ", description: message });
       return;
     }
+    setDirty(false);
     toast({ variant: "success", title: "ส่งอนุมัติแล้ว" });
-    router.push(`/leave-requests/${id}`);
+    router.push(`/leave-requests/${saved.requestNo}`);
     router.refresh();
   }
 
   async function handleSaveAndApprove() {
     setSubmitting("approve");
     setError(null);
-    const id = await saveDraftOrUpdate();
-    if (!id) {
+    const saved = await saveDraftOrUpdate();
+    if (!saved) {
       setSubmitting(null);
       return;
     }
-    const res = await fetch(`/api/leave-requests/${id}/approve-own`, { method: "POST" });
+    const res = await fetch(`/api/leave-requests/${saved.id}/approve-own`, { method: "POST" });
     setSubmitting(null);
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
@@ -152,8 +170,9 @@ export function LeaveRequestForm({
       toast({ variant: body.error === "db_error" ? "warning" : "destructive", title: "บันทึกและอนุมัติไม่สำเร็จ", description: message });
       return;
     }
+    setDirty(false);
     toast({ variant: "success", title: "บันทึกและอนุมัติแล้ว" });
-    router.push(`/leave-requests/${id}`);
+    router.push(`/leave-requests/${saved.requestNo}`);
     router.refresh();
   }
 
@@ -256,6 +275,16 @@ export function LeaveRequestForm({
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="ออกจากหน้านี้โดยไม่บันทึก?"
+        description="ข้อมูลที่แก้ไขจะหายไปถ้าไม่ได้บันทึกก่อนออกจากหน้านี้"
+        confirmLabel="ยืนยัน"
+        cancelLabel="ไม่"
+        onConfirm={confirmLeave}
+        onCancel={cancelLeave}
+      />
     </div>
   );
 }

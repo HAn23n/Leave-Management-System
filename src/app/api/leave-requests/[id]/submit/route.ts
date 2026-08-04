@@ -53,7 +53,7 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
       supabase.from("leave_types").select("name").eq("id", requestRow.leave_type_id).single(),
     ]);
 
-    const requestUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/leave-requests/${requestRow.id}`;
+    const requestUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/leave-requests/${requestRow.request_no}`;
     await Promise.all(
       approvers.map((approver) =>
         notifyNewLeaveRequest({

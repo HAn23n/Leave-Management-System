@@ -105,9 +105,9 @@ export function LeaveRequestActions({
             </Button>
             <Button
               disabled={busy}
-              variant="ghost"
+              variant="outline"
               size="sm"
-              className="flex-1 text-destructive hover:bg-destructive/10 hover:text-destructive"
+              className="flex-1 border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:border-destructive/40"
               onClick={() => setNoteAction(noteAction === "reject" ? null : "reject")}
             >
               ไม่อนุมัติ
@@ -132,7 +132,12 @@ export function LeaveRequestActions({
       )}
 
       {(canOwnerCancel || canApproverCancel) && (
-        <Button disabled={busy} variant="ghost" onClick={() => post("cancel")}>
+        <Button
+          disabled={busy}
+          variant="outline"
+          className="border-destructive/30 bg-destructive/10 text-destructive hover:bg-destructive/20 hover:border-destructive/40"
+          onClick={() => post("cancel")}
+        >
           ยกเลิกคำขอลา
         </Button>
       )}

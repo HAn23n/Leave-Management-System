@@ -20,7 +20,13 @@ export default async function TeamsSettingsPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4 p-4 pb-24">
-      <h1 className="text-lg font-semibold text-foreground">จัดการทีม</h1>
+      <div>
+        <h1 className="text-lg font-semibold text-foreground">จัดการทีมและสายอนุมัติ</h1>
+        <p className="text-sm text-muted-foreground">
+          เพิ่มคนเป็นหัวหน้าทีมที่นี่เพื่อกำหนดว่าใครอนุมัติคำขอลาของทีมไหน — ระบบจะปรับสิทธิ์เป็น
+          &quot;หัวหน้าทีม&quot; ให้อัตโนมัติ ผู้อนุมัติแต่ละคนเป็นหัวหน้าได้ทีมเดียวเท่านั้น
+        </p>
+      </div>
 
       <form action={createTeam} className="flex gap-2">
         <Input name="name" placeholder="ชื่อทีมใหม่" required />

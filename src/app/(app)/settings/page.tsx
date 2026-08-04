@@ -3,7 +3,7 @@ import { requireAdmin } from "@/lib/auth";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
 const SECTIONS = [
-  { href: "/settings/teams", title: "ทีม", description: "จัดการทีมและหัวหน้าทีม" },
+  { href: "/settings/teams", title: "ทีมและสายอนุมัติ", description: "เพิ่มทีม และกำหนดว่าใครอนุมัติทีมไหน" },
   { href: "/settings/users", title: "ผู้ใช้งานและสิทธิ์", description: "จัดการสิทธิ์และทีมของผู้ใช้งาน" },
   { href: "/settings/approver-mappings", title: "สายอนุมัติ (override)", description: "กำหนดผู้อนุมัติพิเศษเฉพาะราย" },
   { href: "/settings/leave-types", title: "ประเภทการลา", description: "จัดการประเภทการลาที่เลือกได้" },

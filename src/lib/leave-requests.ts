@@ -68,9 +68,18 @@ export async function transitionLeaveRequest({
     .maybeSingle();
 
   if (error) {
-    // A trigger (e.g. the overlap check) rejected the write — its message is
-    // already a user-facing Thai string, safe to surface directly.
-    return { ok: false, reason: "db_error", message: error.message };
+    // Only trust the message when it's our own RAISE EXCEPTION (Postgres
+    // gives plain `RAISE EXCEPTION 'text'` the SQLSTATE P0001) — those are
+    // hand-written, already-Thai, user-facing strings (the overlap check,
+    // the field-ownership guard, etc). Anything else could be a raw
+    // Postgres/RLS error exposing table, column, or constraint names, so it
+    // gets a generic fallback instead of being echoed back to the client.
+    const isBusinessRuleError = error.code === "P0001";
+    return {
+      ok: false,
+      reason: "db_error",
+      message: isBusinessRuleError ? error.message : "บันทึกไม่สำเร็จ กรุณาลองใหม่อีกครั้ง",
+    };
   }
 
   if (!data) {

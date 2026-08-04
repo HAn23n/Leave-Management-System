@@ -13,11 +13,19 @@ import { useRouter } from "next/navigation";
  *   `beforeunload`, so a sentinel history entry + `popstate` listener does
  *   the equivalent — push a same-URL entry while dirty, and if the user
  *   backs out of it, immediately re-push it and show the dialog instead.
+ *
+ * Callers must use the returned `navigate()` — not router.push — for any
+ * navigation they trigger themselves while this hook is active (e.g. the
+ * redirect after a successful save). Otherwise the sentinel entry pushed
+ * below is never collapsed: it sits underneath the destination page, so
+ * pressing Back once afterwards lands back on the sentinel (this same form)
+ * instead of wherever the user actually came from.
  */
 export function useUnsavedChangesGuard(dirty: boolean) {
   const router = useRouter();
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
+  const sentinelPushed = useRef(false);
 
   const [pending, setPending] = useState<{ type: "link"; href: string } | { type: "back" } | null>(null);
 
@@ -54,6 +62,7 @@ export function useUnsavedChangesGuard(dirty: boolean) {
     if (!dirty) return;
 
     history.pushState(null, "", window.location.href);
+    sentinelPushed.current = true;
     function handlePopState() {
       if (!dirtyRef.current) return;
       history.pushState(null, "", window.location.href);
@@ -66,9 +75,10 @@ export function useUnsavedChangesGuard(dirty: boolean) {
   function confirmLeave() {
     if (!pending) return;
     if (pending.type === "link") {
-      router.push(pending.href);
+      navigate(pending.href);
     } else {
       history.go(-2);
+      sentinelPushed.current = false;
     }
     setPending(null);
   }
@@ -77,5 +87,16 @@ export function useUnsavedChangesGuard(dirty: boolean) {
     setPending(null);
   }
 
-  return { confirmOpen: pending !== null, confirmLeave, cancelLeave };
+  // Collapses the sentinel entry into the destination (router.replace)
+  // instead of pushing on top of it (router.push), when one is pending.
+  function navigate(href: string) {
+    if (sentinelPushed.current) {
+      sentinelPushed.current = false;
+      router.replace(href);
+    } else {
+      router.push(href);
+    }
+  }
+
+  return { confirmOpen: pending !== null, confirmLeave, cancelLeave, navigate };
 }

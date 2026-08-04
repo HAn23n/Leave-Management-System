@@ -63,7 +63,7 @@ export function LeaveRequestForm({
     }
   }, [leaveTypeId, startDate, endDate, startPeriod, endPeriod, reason]);
 
-  const { confirmOpen, confirmLeave, cancelLeave } = useUnsavedChangesGuard(dirty && !submitting);
+  const { confirmOpen, confirmLeave, cancelLeave, navigate } = useUnsavedChangesGuard(dirty && !submitting);
 
   const isSingleDay = startDate === endDate;
   const canApproveOwn = currentUserRole === "approver" || currentUserRole === "admin";
@@ -125,7 +125,7 @@ export function LeaveRequestForm({
     if (saved) {
       setDirty(false);
       toast({ variant: "success", title: "บันทึกร่างแล้ว" });
-      router.push(`/leave-requests/${saved.requestNo}`);
+      navigate(`/leave-requests/${saved.requestNo}`);
       router.refresh();
     }
   }
@@ -149,7 +149,7 @@ export function LeaveRequestForm({
     }
     setDirty(false);
     toast({ variant: "success", title: "ส่งอนุมัติแล้ว" });
-    router.push(`/leave-requests/${saved.requestNo}`);
+    navigate(`/leave-requests/${saved.requestNo}`);
     router.refresh();
   }
 
@@ -172,7 +172,7 @@ export function LeaveRequestForm({
     }
     setDirty(false);
     toast({ variant: "success", title: "บันทึกและอนุมัติแล้ว" });
-    router.push(`/leave-requests/${saved.requestNo}`);
+    navigate(`/leave-requests/${saved.requestNo}`);
     router.refresh();
   }
 

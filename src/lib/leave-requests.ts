@@ -3,6 +3,25 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AppUser, Database, LeaveRequest, LeaveStatus } from "@/lib/supabase/types";
 import { notifyLeaveDecision } from "@/lib/email";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Looks a request up by its friendly request_no (the normal URL param since
+ * request_no-based routing replaced raw UUIDs), falling back to matching by
+ * id so any link shared before that change keeps resolving. Branches on
+ * shape rather than interpolating the param into an .or() filter string,
+ * since PostgREST parses that as its own mini-DSL — raw user input there
+ * risks filter injection.
+ */
+export async function findLeaveRequestByParam(supabase: SupabaseClient<Database>, requestNoOrId: string) {
+  const { data } = await supabase
+    .from("leave_requests")
+    .select("*")
+    .eq(UUID_RE.test(requestNoOrId) ? "id" : "request_no", requestNoOrId)
+    .maybeSingle();
+  return data;
+}
+
 interface TransitionParams {
   supabase: SupabaseClient<Database>;
   id: string;

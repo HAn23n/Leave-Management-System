@@ -1,25 +1,26 @@
 import { notFound, redirect } from "next/navigation";
 import { requireAppUser } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { findLeaveRequestByParam } from "@/lib/leave-requests";
 import { LeaveRequestForm } from "../../leave-request-form";
 
 export default async function EditLeaveRequestPage({ params }: { params: { requestNo: string } }) {
   const appUser = await requireAppUser();
   const supabase = createServerSupabaseClient();
 
-  const { data: leaveRequest } = await supabase
-    .from("leave_requests")
-    .select("*")
-    .eq("request_no", params.requestNo)
-    .maybeSingle();
+  const leaveRequest = await findLeaveRequestByParam(supabase, params.requestNo);
 
   if (!leaveRequest) notFound();
-  if (leaveRequest.user_id !== appUser.id) redirect(`/leave-requests/${params.requestNo}`);
+  // Redirect by the canonical request_no, not the raw param — matters when
+  // params.requestNo was a bookmarked UUID (findLeaveRequestByParam matched
+  // it by id), so the redirect lands on the friendly URL going forward.
+  const canonicalPath = `/leave-requests/${leaveRequest.request_no ?? leaveRequest.id}`;
+  if (leaveRequest.user_id !== appUser.id) redirect(canonicalPath);
   if (leaveRequest.status !== "draft" && leaveRequest.status !== "returned") {
-    redirect(`/leave-requests/${params.requestNo}`);
+    redirect(canonicalPath);
   }
   // Approvers only review/approve documents — they never submit/edit their own leave requests.
-  if (appUser.role === "approver") redirect(`/leave-requests/${params.requestNo}`);
+  if (appUser.role === "approver") redirect(canonicalPath);
 
   const [{ data: leaveTypes }, { data: holidays }, { data: existingLeave }] = await Promise.all([
     supabase.from("leave_types").select("id, name, color").eq("is_active", true).order("name"),

@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DateRangeFields } from "@/components/date-range-fields";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Download, Search } from "lucide-react";
+import { Download } from "lucide-react";
 import type { LeaveStatus } from "@/lib/supabase/types";
 
 interface ReportSearchParams {
@@ -35,19 +35,14 @@ export default async function ReportsPage({ searchParams }: { searchParams: Repo
   // export it drives) to it instead of "ทุกสถานะ" until the admin changes it.
   const statusDefault = searchParams.status ?? "approved";
 
-  const query = new URLSearchParams();
-  for (const [key, value] of Object.entries(searchParams)) {
-    if (value && value !== "all") query.set(key, String(value));
-  }
-  if (!searchParams.status) {
-    query.set("status", "approved");
-  }
-
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 p-4 pb-24">
       <h1 className="text-lg font-semibold text-foreground">รายงานสรุป</h1>
 
-      <form method="get" className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      {/* One form, submitted straight to the export endpoint — no separate
+          "กรอง" step whose result could go stale relative to the filters
+          actually showing on screen. Whatever's selected is what gets exported. */}
+      <form method="get" action="/api/reports/export-excel" className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {isApprover && (
           <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground">พนักงาน</Label>
@@ -128,18 +123,11 @@ export default async function ReportsPage({ searchParams }: { searchParams: Repo
           holidays={holidayMap}
         />
 
-        <Button type="submit" size="sm" className="col-span-2 md:col-span-4">
-          <Search className="h-4 w-4" />
-          กรอง
-        </Button>
-      </form>
-
-      <Button asChild variant="outline" className="w-full">
-        <a href={`/api/reports/export-excel?${query.toString()}`}>
+        <Button type="submit" className="col-span-2 md:col-span-4">
           <Download className="h-4 w-4" />
           ดาวน์โหลด Excel
-        </a>
-      </Button>
+        </Button>
+      </form>
     </main>
   );
 }

@@ -8,21 +8,13 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { LeaveRequestActions } from "./leave-request-actions";
+import { findLeaveRequestByParam } from "@/lib/leave-requests";
 
 export default async function LeaveRequestDetailPage({ params }: { params: { requestNo: string } }) {
   const appUser = await requireAppUser();
   const supabase = createServerSupabaseClient();
 
-  // Also match a raw UUID so any link shared before request_no-based URLs
-  // still resolves. Branches on shape rather than interpolating the param
-  // into an .or() filter string, since PostgREST parses that as its own
-  // mini-DSL — raw user input there risks filter injection.
-  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.requestNo);
-  const { data: leaveRequest } = await supabase
-    .from("leave_requests")
-    .select("*")
-    .eq(isUuid ? "id" : "request_no", params.requestNo)
-    .maybeSingle();
+  const leaveRequest = await findLeaveRequestByParam(supabase, params.requestNo);
 
   if (!leaveRequest) notFound();
 

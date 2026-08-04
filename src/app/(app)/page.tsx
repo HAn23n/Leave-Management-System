@@ -67,7 +67,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
   const now = nowInBangkok();
   let year = now.getFullYear();
   let month = now.getMonth();
-  if (searchParams.month && /^\d{4}-\d{2}$/.test(searchParams.month)) {
+  if (searchParams.month && /^\d{4}-(0[1-9]|1[0-2])$/.test(searchParams.month)) {
     const [y, m] = searchParams.month.split("-").map(Number);
     year = y;
     month = m - 1;
@@ -82,11 +82,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
   const [{ data: ownRequests }, { data: monthRequests }, { data: leaveTypes }, { data: holidayRows }, pendingTeam] =
     await Promise.all([
       supabase.from("leave_requests").select("status").eq("user_id", appUser.id),
+      // Only confirmed (approved) leave shows as "on leave" in the calendar —
+      // a pending request hasn't actually been granted yet, and could still
+      // be rejected/returned.
       supabase
         .from("leave_requests")
         .select("start_date, end_date, leave_type_id")
         .eq("user_id", appUser.id)
-        .in("status", ["pending", "approved"])
+        .eq("status", "approved")
         .lte("start_date", monthEnd)
         .gte("end_date", monthStart),
       supabase.from("leave_types").select("id, name, color"),

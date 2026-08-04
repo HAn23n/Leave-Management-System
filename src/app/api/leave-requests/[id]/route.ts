@@ -12,6 +12,12 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   const limited = rateLimitResponse(appUser.id);
   if (limited) return limited;
 
+  // Approvers only review/approve their team's documents — they never edit
+  // their own leave requests, even an old draft from before they held the role.
+  if (appUser.role === "approver") {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
   const body = await request.json().catch(() => null);
   const parsed = leaveRequestInputSchema.safeParse(body);
   if (!parsed.success) {

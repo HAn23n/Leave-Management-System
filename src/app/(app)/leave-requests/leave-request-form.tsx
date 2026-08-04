@@ -224,7 +224,7 @@ export function LeaveRequestForm({
           <Button onClick={handleSaveDraft} disabled={busy} variant="outline" className="flex-1">
             {submitting === "draft" ? "กำลังบันทึก..." : "บันทึกร่าง"}
           </Button>
-          {!canApproveOwn && (
+          {currentUserRole !== "approver" && (
             <Button onClick={handleSubmitForApproval} disabled={busy} className="flex-1">
               {submitting === "submit" ? "กำลังส่ง..." : "ส่งอนุมัติ"}
             </Button>

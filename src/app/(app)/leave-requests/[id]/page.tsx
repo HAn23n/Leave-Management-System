@@ -112,6 +112,7 @@ export default async function LeaveRequestDetailPage({ params }: { params: { id:
         status={leaveRequest.status}
         isOwner={isOwner}
         isApproverInScope={isApproverInScope}
+        currentUserRole={appUser.role}
       />
     </main>
   );

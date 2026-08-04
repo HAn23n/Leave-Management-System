@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import type { LeaveStatus } from "@/lib/supabase/types";
+import type { LeaveStatus, UserRole } from "@/lib/supabase/types";
 
 type NoteAction = "reject" | "return" | null;
 
@@ -12,11 +12,13 @@ export function LeaveRequestActions({
   status,
   isOwner,
   isApproverInScope,
+  currentUserRole,
 }: {
   requestId: string;
   status: LeaveStatus;
   isOwner: boolean;
   isApproverInScope: boolean;
+  currentUserRole: UserRole;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -49,7 +51,9 @@ export function LeaveRequestActions({
     router.refresh();
   }
 
-  const canOwnerSubmit = isOwner && (status === "draft" || status === "returned");
+  // Approvers only review/approve their team's documents — they never submit
+  // their own leave, even an old draft/returned one from before they held the role.
+  const canOwnerSubmit = isOwner && currentUserRole !== "approver" && (status === "draft" || status === "returned");
   const canOwnerCancel = isOwner && (status === "draft" || status === "pending");
   const canApproverAct = isApproverInScope && !isOwner && status === "pending";
   // The cancel API also allows approver/admin to cancel an already-approved

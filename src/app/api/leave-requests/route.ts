@@ -16,6 +16,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "no_team" }, { status: 400 });
   }
 
+  // Approvers only review/approve their team's documents — they never file
+  // their own leave. The UI already routes them away from this form; this
+  // is the same rule enforced at the write path, so a direct API call can't
+  // bypass it.
+  if (appUser.role === "approver") {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
   const body = await request.json().catch(() => null);
   const parsed = leaveRequestInputSchema.safeParse(body);
   if (!parsed.success) {

@@ -15,6 +15,13 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
   const limited = rateLimitResponse(appUser.id);
   if (limited) return limited;
 
+  // Approvers only review/approve their team's documents — they never
+  // submit their own leave for approval, even an old draft/returned one
+  // from before they held the role.
+  if (appUser.role === "approver") {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
   const supabase = createServerSupabaseClient();
 
   const result = await transitionLeaveRequest({

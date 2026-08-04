@@ -32,13 +32,19 @@ export async function GET(request: NextRequest) {
       authUser.email ??
       "";
 
+    // role/is_active set explicitly (not left to column defaults) so this
+    // insert satisfies users_insert_self's WITH CHECK regardless of what the
+    // live schema's defaults happen to be.
     const { error: insertError } = await supabase.from("users").insert({
       id: authUser.id,
       email: authUser.email ?? "",
       full_name: fullName,
+      role: "user",
+      is_active: true,
     });
 
     if (insertError) {
+      console.error("[auth/callback] users insert failed:", insertError);
       return NextResponse.redirect(`${origin}/login?error=profile_create_failed`);
     }
 

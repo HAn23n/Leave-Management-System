@@ -39,7 +39,8 @@ export async function updateUserRole(formData: FormData) {
 export async function updateUserTeam(formData: FormData) {
   await requireAdmin();
   const id = String(formData.get("id"));
-  const teamId = String(formData.get("team_id") || "");
+  const rawTeamId = String(formData.get("team_id") || "");
+  const teamId = rawTeamId === "none" ? "" : rawTeamId;
 
   const supabase = createServerSupabaseClient();
   const { data: user } = await supabase.from("users").select("role").eq("id", id).maybeSingle();

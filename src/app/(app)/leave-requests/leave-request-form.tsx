@@ -214,7 +214,7 @@ export function LeaveRequestForm({
         {error && <p className="text-sm text-destructive">{error}</p>}
       </div>
 
-      <div className="sticky bottom-16 flex flex-col gap-2 border-t border-border bg-white p-4 md:bottom-0">
+      <div className="sticky bottom-16 flex flex-col gap-2 border-t border-border bg-white p-4 md:static">
         {canApproveOwn && (
           <Button onClick={handleSaveAndApprove} disabled={busy} variant="default">
             {submitting === "approve" ? "กำลังบันทึก..." : "บันทึกและอนุมัติเลย"}

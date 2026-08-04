@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { isNavItemActive, type NavItem } from "./nav-items";
 import { NavIcon } from "./nav-icon";
+import { Logo } from "./logo";
 import { cn } from "@/lib/utils";
 
 // Desktop-only sidebar, hidden on mobile in favor of the bottom tab bar.
@@ -13,9 +14,7 @@ export function SidebarNav({ items, userLabel }: { items: NavItem[]; userLabel: 
   return (
     <aside className="hidden w-60 shrink-0 flex-col border-r border-border bg-white md:flex">
       <div className="flex h-16 items-center gap-2 border-b border-border px-4">
-        <div className="gradient-primary flex h-8 w-8 items-center justify-center rounded-xl text-sm font-bold text-primary-foreground shadow-sm shadow-primary/30">
-          ล
-        </div>
+        <Logo className="h-8 w-8 rounded-xl shadow-sm shadow-primary/30" />
         <span className="text-sm font-semibold text-foreground">ระบบบันทึกการลา</span>
       </div>
 

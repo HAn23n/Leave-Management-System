@@ -1,6 +1,5 @@
 import { requireAppUser } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { buildReportQuery } from "@/lib/reports";
 import { STATUS_LABEL_TH } from "@/lib/status";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
@@ -22,23 +21,11 @@ export default async function ReportsPage({ searchParams }: { searchParams: Repo
   const supabase = createServerSupabaseClient();
   const isApprover = appUser.role === "approver" || appUser.role === "admin";
 
-  const filters = {
-    userId: searchParams.user_id,
-    teamId: searchParams.team_id,
-    leaveTypeId: searchParams.leave_type_id,
-    status: searchParams.status,
-    from: searchParams.from,
-    to: searchParams.to,
-  };
-
-  const [{ data: requests }, { data: leaveTypes }, { data: teams }, { data: teamUsers }] = await Promise.all([
-    buildReportQuery(supabase, filters),
+  const [{ data: leaveTypes }, { data: teams }, { data: teamUsers }] = await Promise.all([
     supabase.from("leave_types").select("id, name"),
     appUser.role === "admin" ? supabase.from("teams").select("id, name") : Promise.resolve({ data: null }),
     isApprover ? supabase.from("users").select("id, full_name") : Promise.resolve({ data: null }),
   ]);
-
-  const rows = requests ?? [];
 
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(searchParams)) {
@@ -147,9 +134,6 @@ export default async function ReportsPage({ searchParams }: { searchParams: Repo
       </form>
 
       <div className="flex flex-col items-center gap-3 rounded-2xl border border-border bg-white p-6 text-center">
-        <p className="text-sm text-muted-foreground">
-          พบข้อมูลตามตัวกรอง <span className="font-semibold text-foreground">{rows.length}</span> รายการ
-        </p>
         <Button asChild>
           <a href={`/api/reports/export-excel?${query.toString()}`}>
             <Download className="h-4 w-4" />

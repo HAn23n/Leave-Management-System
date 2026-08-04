@@ -1,13 +1,23 @@
-// One-off generator for placeholder PWA icons (no external image deps needed).
-// Draws a simple red/white "calendar" mark on a solid red background.
+// Generator for the PWA/app icons, matching public/logo.svg (the same red/pink
+// "calendar with a checkmark" mark, minus the SVG's rounded corners/gradient
+// curve which aren't worth hand-rolling in raw pixel-pushing PNG code).
 // Regenerate with: node scripts/generate-pwa-icons.js
-// Replace public/icons/*.png with real branded artwork before shipping to production.
 const fs = require("fs");
 const path = require("path");
 const zlib = require("zlib");
 
-const RED = [0xc8, 0x1e, 0x1e, 0xff];
+const RED = [0xe2, 0x17, 0x2b, 0xff];
+const RED_PINK = [0xf5, 0x3d, 0x7a, 0xff];
 const WHITE = [0xff, 0xff, 0xff, 0xff];
+
+function lerp(a, b, t) {
+  return Math.round(a + (b - a) * t);
+}
+
+function bgColor(x, y, size) {
+  const t = (x + y) / (2 * size); // top-left -> bottom-right diagonal, like the SVG gradient
+  return [lerp(RED[0], RED_PINK[0], t), lerp(RED[1], RED_PINK[1], t), lerp(RED[2], RED_PINK[2], t), 0xff];
+}
 
 function crc32(buf) {
   let c;
@@ -47,31 +57,34 @@ function drawIcon(size) {
   const fillRect = (x0, y0, w, h, color) => {
     for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) set(x, y, color);
   };
+  // fraction-of-size coordinates, matching public/logo.svg's 64-unit grid
+  const f = (n) => Math.round(n * size);
+  const fillRectF = (x0, y0, w, h, color) => fillRect(f(x0), f(y0), f(w), f(h), color);
 
-  // Background
-  fillRect(0, 0, size, size, RED);
+  // Diagonal red -> pink gradient background, same direction as the SVG
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) set(x, y, bgColor(x, y, size));
 
-  // White "document/calendar" card, centered, ~56% of the icon
-  const cardW = Math.round(size * 0.56);
-  const cardH = Math.round(size * 0.6);
-  const cardX = Math.round((size - cardW) / 2);
-  const cardY = Math.round((size - cardH) / 2);
-  fillRect(cardX, cardY, cardW, cardH, WHITE);
+  // Two "ring binder" tabs poking above the card
+  fillRectF(22 / 64, 11 / 64, 4 / 64, 10 / 64, WHITE);
+  fillRectF(38 / 64, 11 / 64, 4 / 64, 10 / 64, WHITE);
 
-  // Red header strip on the card
-  const headerH = Math.round(cardH * 0.22);
-  fillRect(cardX, cardY, cardW, headerH, RED);
+  // White calendar card + its red header band
+  fillRectF(14 / 64, 17 / 64, 36 / 64, 33 / 64, WHITE);
+  fillRectF(14 / 64, 17 / 64, 36 / 64, 11 / 64, RED);
 
-  // A couple of red "rows" inside the card body to suggest a list/calendar
-  const rowH = Math.round(cardH * 0.08);
-  const rowGap = Math.round(cardH * 0.06);
-  const rowW = Math.round(cardW * 0.6);
-  const rowX = cardX + Math.round(cardW * 0.2);
-  let rowY = cardY + headerH + rowGap;
-  for (let i = 0; i < 2; i++) {
-    fillRect(rowX, rowY, rowW, rowH, RED);
-    rowY += rowH + rowGap;
-  }
+  // Checkmark, stamped as thick dots along the two segments
+  const thickness = Math.max(2, Math.round(size * 0.05));
+  const stampLine = (x0, y0, x1, y1) => {
+    const steps = Math.max(Math.abs(f(x1) - f(x0)), Math.abs(f(y1) - f(y0)));
+    for (let i = 0; i <= steps; i++) {
+      const t = steps === 0 ? 0 : i / steps;
+      const cx = f(x0) + (f(x1) - f(x0)) * t;
+      const cy = f(y0) + (f(y1) - f(y0)) * t;
+      fillRect(Math.round(cx - thickness / 2), Math.round(cy - thickness / 2), thickness, thickness, RED);
+    }
+  };
+  stampLine(22.5 / 64, 34.5 / 64, 29 / 64, 41 / 64);
+  stampLine(29 / 64, 41 / 64, 42 / 64, 28 / 64);
 
   return pixels;
 }

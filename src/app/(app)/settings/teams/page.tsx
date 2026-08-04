@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { createTeam, setTeamActive, addTeamLead, removeTeamLead } from "./actions";
 
 export default async function TeamsSettingsPage() {
@@ -75,14 +76,18 @@ export default async function TeamsSettingsPage() {
                 {availableUsers.length > 0 && (
                   <form action={addTeamLead} className="flex gap-2 pt-2">
                     <input type="hidden" name="team_id" value={team.id} />
-                    <select name="user_id" required className="h-9 flex-1 rounded-xl border border-input bg-background px-2 text-sm">
-                      <option value="">เลือกสมาชิกในทีมเป็นหัวหน้า</option>
-                      {availableUsers.map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.full_name}
-                        </option>
-                      ))}
-                    </select>
+                    <Select name="user_id" required>
+                      <SelectTrigger className="h-9 flex-1">
+                        <SelectValue placeholder="เลือกสมาชิกในทีมเป็นหัวหน้า" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableUsers.map((u) => (
+                          <SelectItem key={u.id} value={u.id}>
+                            {u.full_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <Button type="submit" size="sm" variant="outline">
                       เพิ่ม
                     </Button>

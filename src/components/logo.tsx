@@ -1,0 +1,25 @@
+export function Logo({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 64 64" className={className} role="img" aria-label="โลโก้ระบบบันทึกการลา">
+      <defs>
+        <linearGradient id="logo-gradient" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#E2172B" />
+          <stop offset="1" stopColor="#F53D7A" />
+        </linearGradient>
+      </defs>
+      <rect width="64" height="64" rx="16" fill="url(#logo-gradient)" />
+      <rect x="22" y="11" width="4" height="10" rx="2" fill="#fff" />
+      <rect x="38" y="11" width="4" height="10" rx="2" fill="#fff" />
+      <rect x="14" y="17" width="36" height="33" rx="6" fill="#fff" />
+      <path d="M14 23a6 6 0 0 1 6-6h24a6 6 0 0 1 6 6v5H14v-5Z" fill="#E2172B" />
+      <path
+        d="M22.5 34.5 29 41l13-13"
+        fill="none"
+        stroke="#E2172B"
+        strokeWidth="5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}

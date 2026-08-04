@@ -49,7 +49,7 @@ export function LeaveCalendarMonth({
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="mx-auto flex w-full max-w-sm flex-col gap-3">
       <div className="flex items-center justify-between">
         <Link
           href={prevHref}
@@ -70,9 +70,9 @@ export function LeaveCalendarMonth({
         </Link>
       </div>
 
-      <div className="grid grid-cols-7 gap-1 text-center text-xs text-muted-foreground">
-        {WEEKDAY_LABELS.map((w) => (
-          <div key={w} className="py-1">
+      <div className="grid grid-cols-7 gap-1 text-center text-xs">
+        {WEEKDAY_LABELS.map((w, i) => (
+          <div key={w} className={cn("py-1", i === 0 || i === 6 ? "text-primary/70" : "text-muted-foreground")}>
             {w}
           </div>
         ))}
@@ -82,10 +82,12 @@ export function LeaveCalendarMonth({
         {Array.from({ length: leadingBlanks }).map((_, i) => (
           <div key={`blank-${i}`} />
         ))}
-        {cells.map(({ day, iso }) => {
+        {cells.map(({ day, iso }, i) => {
           const holidayName = holidays.get(iso);
           const leave = leaveDays.get(iso);
           const isToday = iso === todayIso;
+          const dow = (leadingBlanks + i) % 7;
+          const isWeekend = dow === 0 || dow === 6;
 
           return (
             <div
@@ -93,7 +95,7 @@ export function LeaveCalendarMonth({
               title={holidayName ?? leave?.typeName}
               className={cn(
                 "flex aspect-square flex-col items-center justify-center rounded-lg text-xs font-medium",
-                !holidayName && !leave && "text-foreground",
+                !holidayName && !leave && (isWeekend ? "text-primary/70" : "text-foreground"),
                 isToday && "ring-2 ring-primary ring-offset-1"
               )}
               style={

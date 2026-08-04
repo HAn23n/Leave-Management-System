@@ -1,6 +1,7 @@
 import { requireAdmin } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { createApproverMapping, deleteApproverMapping } from "./actions";
 
 export default async function ApproverMappingsSettingsPage() {
@@ -25,22 +26,30 @@ export default async function ApproverMappingsSettingsPage() {
       </div>
 
       <form action={createApproverMapping} className="flex flex-wrap gap-2">
-        <select name="user_id" required className="h-10 flex-1 rounded-xl border border-input bg-background px-2 text-sm">
-          <option value="">เลือกพนักงาน (ผู้ขอ)</option>
-          {(users ?? []).map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.full_name}
-            </option>
-          ))}
-        </select>
-        <select name="approver_id" required className="h-10 flex-1 rounded-xl border border-input bg-background px-2 text-sm">
-          <option value="">เลือกผู้อนุมัติ</option>
-          {approverOptions.map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.full_name}
-            </option>
-          ))}
-        </select>
+        <Select name="user_id" required>
+          <SelectTrigger className="flex-1">
+            <SelectValue placeholder="เลือกพนักงาน (ผู้ขอ)" />
+          </SelectTrigger>
+          <SelectContent>
+            {(users ?? []).map((u) => (
+              <SelectItem key={u.id} value={u.id}>
+                {u.full_name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select name="approver_id" required>
+          <SelectTrigger className="flex-1">
+            <SelectValue placeholder="เลือกผู้อนุมัติ" />
+          </SelectTrigger>
+          <SelectContent>
+            {approverOptions.map((u) => (
+              <SelectItem key={u.id} value={u.id}>
+                {u.full_name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Button type="submit">เพิ่ม</Button>
       </form>
 

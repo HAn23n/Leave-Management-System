@@ -125,9 +125,9 @@ export function CalendarDatePicker({
             </button>
           </div>
 
-          <div className="grid grid-cols-7 gap-1 text-center text-xs text-muted-foreground">
-            {WEEKDAY_LABELS.map((w) => (
-              <div key={w} className="py-1">
+          <div className="grid grid-cols-7 gap-1 text-center text-xs">
+            {WEEKDAY_LABELS.map((w, i) => (
+              <div key={w} className={cn("py-1", i === 0 || i === 6 ? "text-primary/70" : "text-muted-foreground")}>
                 {w}
               </div>
             ))}
@@ -158,7 +158,7 @@ export function CalendarDatePicker({
                       : holidayName
                         ? "bg-muted text-muted-foreground hover:bg-accent"
                         : isWeekend
-                          ? "text-muted-foreground hover:bg-accent"
+                          ? "text-primary/70 hover:bg-accent"
                           : "text-foreground hover:bg-accent",
                     isToday && !isSelected && "ring-1 ring-primary"
                   )}

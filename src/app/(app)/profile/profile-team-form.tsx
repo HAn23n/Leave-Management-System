@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface TeamOption {
   id: string;
@@ -62,18 +63,18 @@ export function ProfileTeamForm({
         </p>
       )}
 
-      <select
-        value={selected}
-        onChange={(e) => setSelected(e.target.value)}
-        disabled={disabled || loading}
-        className="h-11 rounded-xl border border-input bg-background px-3 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {teams.map((team) => (
-          <option key={team.id} value={team.id}>
-            {team.name}
-          </option>
-        ))}
-      </select>
+      <Select value={selected} onValueChange={setSelected} disabled={disabled || loading}>
+        <SelectTrigger>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {teams.map((team) => (
+            <SelectItem key={team.id} value={team.id}>
+              {team.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
 
       {message && (
         <p className={message.type === "error" ? "text-sm text-destructive" : "text-sm text-green-700"}>

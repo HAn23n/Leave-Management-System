@@ -2,6 +2,7 @@ import { requireAdmin } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { updateUserRole, updateUserTeam, setUserActive } from "./actions";
 
 const ROLE_LABEL = { admin: "ผู้ดูแลระบบ", approver: "หัวหน้าทีม", user: "พนักงาน" } as const;
@@ -37,17 +38,18 @@ export default async function UsersSettingsPage() {
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <form action={updateUserRole} className="flex items-center gap-2">
                 <input type="hidden" name="id" value={u.id} />
-                <select
-                  name="role"
-                  defaultValue={u.role}
-                  className="h-9 rounded-xl border border-input bg-background px-2 text-sm"
-                >
-                  {Object.entries(ROLE_LABEL).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
+                <Select name="role" defaultValue={u.role}>
+                  <SelectTrigger className="h-9 w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(ROLE_LABEL).map(([value, label]) => (
+                      <SelectItem key={value} value={value}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <Button type="submit" size="sm" variant="outline">
                   บันทึกสิทธิ์
                 </Button>
@@ -55,18 +57,19 @@ export default async function UsersSettingsPage() {
 
               <form action={updateUserTeam} className="flex items-center gap-2">
                 <input type="hidden" name="id" value={u.id} />
-                <select
-                  name="team_id"
-                  defaultValue={u.team_id ?? ""}
-                  className="h-9 rounded-xl border border-input bg-background px-2 text-sm"
-                >
-                  <option value="">ไม่มีทีม</option>
-                  {(teams ?? []).map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
+                <Select name="team_id" defaultValue={u.team_id ?? "none"}>
+                  <SelectTrigger className="h-9 w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">ไม่มีทีม</SelectItem>
+                    {(teams ?? []).map((t) => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <Button type="submit" size="sm" variant="outline">
                   บันทึกทีม
                 </Button>

@@ -6,6 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CalendarDateField } from "@/components/calendar-date-field";
 import { createHoliday, deleteHoliday } from "./actions";
+import type { Holiday } from "@/lib/supabase/types";
+
+const SOURCE_LABEL: Record<Holiday["source"], string> = {
+  seed: "ค่าเริ่มต้น",
+  api: "ซิงก์อัตโนมัติ",
+  manual: "เพิ่มเอง",
+};
 
 export default async function HolidaysSettingsPage() {
   await requireAdmin();
@@ -33,9 +40,7 @@ export default async function HolidaysSettingsPage() {
               <p className="text-xs text-muted-foreground">{formatThaiDate(h.holiday_date, "long")}</p>
             </div>
             <div className="flex items-center gap-2">
-              <Badge variant={h.source === "seed" ? "secondary" : "outline"}>
-                {h.source === "seed" ? "ค่าเริ่มต้น" : "เพิ่มเอง"}
-              </Badge>
+              <Badge variant={h.source === "manual" ? "outline" : "secondary"}>{SOURCE_LABEL[h.source]}</Badge>
               <form action={deleteHoliday}>
                 <input type="hidden" name="id" value={h.id} />
                 <Button type="submit" size="sm" variant="ghost">

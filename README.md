@@ -72,9 +72,10 @@ SUPABASE_SERVICE_ROLE_KEY=           # Project Settings > API — server-only, n
 RESEND_API_KEY=
 RESEND_FROM_EMAIL="Leave System <noreply@yourdomain.com>"
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
+CRON_SECRET=                          # any random string — see "Holidays" below
 ```
 
-`.env.local` is git-ignored (see `.gitignore` — `.env*` is excluded except the explicitly force-added `.env.example`). **Never commit real secrets.** In Vercel, set these as Project → Settings → Environment Variables instead, with separate values for Production and Preview if you use different Supabase projects per environment.
+`.env.local` is git-ignored (see `.gitignore` — `.env*` is excluded except the explicitly force-added `.env.example`). **Never commit real secrets.** In Vercel, set these as Project → Settings → Environment Variables instead, with separate values for Production and Preview if you use different Supabase projects per environment. `CRON_SECRET` only matters in Vercel (Vercel Cron sends it back automatically once set — nothing to configure beyond adding the env var); it's harmless to leave blank locally.
 
 ## 4. Run locally
 
@@ -100,6 +101,18 @@ update users set role = 'admin' where email = 'you@yourcompany.com';
 5. Deploy.
 
 `vercel.json` pins the deployed functions to the `bom1` (Mumbai) region — match this to whichever region your Supabase project actually lives in (Project Settings → General → Region). Every page does at least one auth check plus one or more DB queries against Supabase; if the function region and the database region are on different continents, that round-trip latency compounds and the whole app feels sluggish on every navigation. Co-locating them is the single biggest lever for perceived speed here.
+
+## Holidays
+
+2026's holidays are seeded once in `0001_tables.sql`/`0006_seed.sql`. Every following year is filled in automatically by a Vercel Cron Job (`vercel.json`'s `crons` entry, Dec 1 each year) that calls `/api/cron/sync-holidays`, which pulls next year's Thai public holidays from [date.nager.at](https://date.nager.at) and inserts any dates not already in the table (`source = 'api'`) — it never overwrites a row an admin already entered.
+
+That API is strongest for fixed-date holidays; it may miss or misdate lunar Buddhist holidays (Makha/Visakha/Asalha Bucha) and cabinet-resolution substitution days, same limitation the original hardcoded seed called out. **Check Settings → วันหยุด once a year after the sync runs** and add/fix those manually — they're still `source = 'manual'`, same as before.
+
+Requires `CRON_SECRET` set in Vercel (see step 3) so the endpoint only accepts Vercel's own cron requests. To trigger a sync manually (e.g. testing, or a year Vercel's schedule hasn't reached yet), call it yourself with `?year=YYYY`:
+
+```bash
+curl -H "Authorization: Bearer $CRON_SECRET" "https://your-app.vercel.app/api/cron/sync-holidays?year=2027"
+```
 
 ## Development
 

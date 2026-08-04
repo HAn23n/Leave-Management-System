@@ -60,7 +60,7 @@ export interface Holiday {
   id: string;
   holiday_date: string;
   name: string;
-  source: "seed" | "manual";
+  source: "seed" | "manual" | "api";
   created_at: string;
 }
 

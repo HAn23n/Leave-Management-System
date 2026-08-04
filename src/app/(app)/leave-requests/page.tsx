@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CalendarDateField } from "@/components/calendar-date-field";
 import { Search } from "lucide-react";
 import type { LeaveStatus } from "@/lib/supabase/types";
 
@@ -44,16 +45,18 @@ export default async function LeaveRequestsSearchPage({
     query = query.lte("start_date", searchParams.to);
   }
 
-  const [{ data: requests }, { data: leaveTypes }, { data: users }] = await Promise.all([
+  const [{ data: requests }, { data: leaveTypes }, { data: users }, { data: holidayRows }] = await Promise.all([
     query,
     supabase.from("leave_types").select("id, name, color"),
     appUser.role === "user"
       ? Promise.resolve({ data: null })
       : supabase.from("users").select("id, full_name"),
+    supabase.from("holidays").select("holiday_date, name"),
   ]);
 
   const leaveTypeMap = new Map((leaveTypes ?? []).map((lt) => [lt.id, lt]));
   const userMap = new Map((users ?? []).map((u) => [u.id, u.full_name]));
+  const holidayMap = new Map((holidayRows ?? []).map((h) => [h.holiday_date, h.name]));
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 p-4 pb-24">
@@ -103,21 +106,11 @@ export default async function LeaveRequestsSearchPage({
 
         <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground">ตั้งแต่วันที่</Label>
-          <input
-            type="date"
-            name="from"
-            defaultValue={searchParams.from ?? ""}
-            className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm"
-          />
+          <CalendarDateField name="from" defaultValue={searchParams.from} holidays={holidayMap} />
         </div>
         <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground">ถึงวันที่</Label>
-          <input
-            type="date"
-            name="to"
-            defaultValue={searchParams.to ?? ""}
-            className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm"
-          />
+          <CalendarDateField name="to" defaultValue={searchParams.to} holidays={holidayMap} />
         </div>
 
         <Button type="submit" size="sm" className="col-span-2 md:col-span-4">

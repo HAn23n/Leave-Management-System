@@ -4,19 +4,23 @@ import { formatThaiDate } from "@/lib/date";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CalendarDateField } from "@/components/calendar-date-field";
 import { createHoliday, deleteHoliday } from "./actions";
 
 export default async function HolidaysSettingsPage() {
   await requireAdmin();
   const supabase = createServerSupabaseClient();
   const { data: holidays } = await supabase.from("holidays").select("*").order("holiday_date");
+  const holidayMap = new Map((holidays ?? []).map((h) => [h.holiday_date, h.name]));
 
   return (
     <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-4 p-4 pb-24">
       <h1 className="text-lg font-semibold text-foreground">วันหยุด</h1>
 
       <form action={createHoliday} className="flex gap-2">
-        <Input type="date" name="holiday_date" required className="w-40" />
+        <div className="w-40">
+          <CalendarDateField name="holiday_date" holidays={holidayMap} />
+        </div>
         <Input name="name" placeholder="ชื่อวันหยุด" required className="flex-1" />
         <Button type="submit">เพิ่ม</Button>
       </form>

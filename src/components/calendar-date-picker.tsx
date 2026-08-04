@@ -26,11 +26,14 @@ export function CalendarDatePicker({
   onChange,
   holidays,
   disabled,
+  name,
 }: {
   value: string | null;
   onChange: (isoDate: string) => void;
   holidays: Map<string, string>;
   disabled?: boolean;
+  /** Renders a hidden input so the picked date participates in a native <form> submit (GET filters, server actions). */
+  name?: string;
 }) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -91,6 +94,7 @@ export function CalendarDatePicker({
 
   return (
     <div className="relative" ref={containerRef}>
+      {name && <input type="hidden" name={name} value={value ?? ""} />}
       <button
         type="button"
         disabled={disabled}

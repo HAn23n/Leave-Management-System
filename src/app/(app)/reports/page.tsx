@@ -1,10 +1,11 @@
 import { requireAppUser } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { buildReportQuery, loadReportLookups } from "@/lib/reports";
-import { formatThaiDate } from "@/lib/date";
-import { STATUS_LABEL_TH, STATUS_BADGE_VARIANT } from "@/lib/status";
-import { Badge } from "@/components/ui/badge";
+import { buildReportQuery } from "@/lib/reports";
+import { STATUS_LABEL_TH } from "@/lib/status";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Download } from "lucide-react";
 import type { LeaveStatus } from "@/lib/supabase/types";
 
 interface ReportSearchParams {
@@ -38,130 +39,123 @@ export default async function ReportsPage({ searchParams }: { searchParams: Repo
   ]);
 
   const rows = requests ?? [];
-  const { userMap, leaveTypeMap } = await loadReportLookups(supabase, rows);
 
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(searchParams)) {
-    if (value) query.set(key, String(value));
+    if (value && value !== "all") query.set(key, String(value));
   }
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 p-4 pb-24">
       <h1 className="text-lg font-semibold text-foreground">รายงานสรุป</h1>
 
-      <form method="get" className="grid grid-cols-2 gap-2 md:grid-cols-4">
+      <form method="get" className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {isApprover && (
-          <select
-            name="user_id"
-            defaultValue={searchParams.user_id ?? ""}
-            className="h-10 rounded-xl border border-input bg-background px-2 text-sm"
-          >
-            <option value="">ทุกคน</option>
-            {(teamUsers ?? []).map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.full_name}
-              </option>
-            ))}
-          </select>
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">พนักงาน</Label>
+            <Select name="user_id" defaultValue={searchParams.user_id ?? "all"}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">ทุกคน</SelectItem>
+                {(teamUsers ?? []).map((u) => (
+                  <SelectItem key={u.id} value={u.id}>
+                    {u.full_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         )}
 
         {appUser.role === "admin" && (
-          <select
-            name="team_id"
-            defaultValue={searchParams.team_id ?? ""}
-            className="h-10 rounded-xl border border-input bg-background px-2 text-sm"
-          >
-            <option value="">ทุกทีม</option>
-            {(teams ?? []).map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">ทีม</Label>
+            <Select name="team_id" defaultValue={searchParams.team_id ?? "all"}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">ทุกทีม</SelectItem>
+                {(teams ?? []).map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         )}
 
-        <select
-          name="leave_type_id"
-          defaultValue={searchParams.leave_type_id ?? ""}
-          className="h-10 rounded-xl border border-input bg-background px-2 text-sm"
-        >
-          <option value="">ทุกประเภท</option>
-          {(leaveTypes ?? []).map((lt) => (
-            <option key={lt.id} value={lt.id}>
-              {lt.name}
-            </option>
-          ))}
-        </select>
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">ประเภทการลา</Label>
+          <Select name="leave_type_id" defaultValue={searchParams.leave_type_id ?? "all"}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">ทุกประเภท</SelectItem>
+              {(leaveTypes ?? []).map((lt) => (
+                <SelectItem key={lt.id} value={lt.id}>
+                  {lt.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-        <select
-          name="status"
-          defaultValue={searchParams.status ?? ""}
-          className="h-10 rounded-xl border border-input bg-background px-2 text-sm"
-        >
-          <option value="">ทุกสถานะ</option>
-          {(Object.keys(STATUS_LABEL_TH) as LeaveStatus[]).map((s) => (
-            <option key={s} value={s}>
-              {STATUS_LABEL_TH[s]}
-            </option>
-          ))}
-        </select>
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">สถานะ</Label>
+          <Select name="status" defaultValue={searchParams.status ?? "all"}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">ทุกสถานะ</SelectItem>
+              {(Object.keys(STATUS_LABEL_TH) as LeaveStatus[]).map((s) => (
+                <SelectItem key={s} value={s}>
+                  {STATUS_LABEL_TH[s]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
-        <input
-          type="date"
-          name="from"
-          defaultValue={searchParams.from ?? ""}
-          className="h-10 rounded-xl border border-input bg-background px-2 text-sm"
-        />
-        <input
-          type="date"
-          name="to"
-          defaultValue={searchParams.to ?? ""}
-          className="h-10 rounded-xl border border-input bg-background px-2 text-sm"
-        />
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">ตั้งแต่วันที่</Label>
+          <input
+            type="date"
+            name="from"
+            defaultValue={searchParams.from ?? ""}
+            className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">ถึงวันที่</Label>
+          <input
+            type="date"
+            name="to"
+            defaultValue={searchParams.to ?? ""}
+            className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm"
+          />
+        </div>
 
-        <Button type="submit" variant="outline" size="sm">
+        <Button type="submit" variant="outline" size="sm" className="col-span-2 md:col-span-4">
           กรอง
         </Button>
       </form>
 
-      <Button asChild>
-        <a href={`/api/reports/export-excel?${query.toString()}`}>ดาวน์โหลด Excel</a>
-      </Button>
-
-      <div className="overflow-x-auto rounded-lg border border-border">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-secondary text-secondary-foreground">
-            <tr>
-              <th className="p-3">พนักงาน</th>
-              <th className="p-3">ประเภท</th>
-              <th className="p-3">วันที่</th>
-              <th className="p-3">จำนวนวัน</th>
-              <th className="p-3">สถานะ</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.id} className="border-t border-border">
-                <td className="p-3">{userMap.get(r.user_id) ?? "-"}</td>
-                <td className="p-3">{leaveTypeMap.get(r.leave_type_id) ?? "-"}</td>
-                <td className="p-3 whitespace-nowrap">
-                  {formatThaiDate(r.start_date)} - {formatThaiDate(r.end_date)}
-                </td>
-                <td className="p-3">{r.total_days ?? "-"}</td>
-                <td className="p-3">
-                  <Badge variant={STATUS_BADGE_VARIANT[r.status]}>{STATUS_LABEL_TH[r.status]}</Badge>
-                </td>
-              </tr>
-            ))}
-            {rows.length === 0 && (
-              <tr>
-                <td colSpan={5} className="p-6 text-center text-muted-foreground">
-                  ไม่พบข้อมูล
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+      <div className="flex flex-col items-center gap-3 rounded-2xl border border-border bg-white p-6 text-center">
+        <p className="text-sm text-muted-foreground">
+          พบข้อมูลตามตัวกรอง <span className="font-semibold text-foreground">{rows.length}</span> รายการ
+        </p>
+        <Button asChild>
+          <a href={`/api/reports/export-excel?${query.toString()}`}>
+            <Download className="h-4 w-4" />
+            ดาวน์โหลด Excel
+          </a>
+        </Button>
       </div>
     </main>
   );

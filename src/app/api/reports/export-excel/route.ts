@@ -53,8 +53,9 @@ export async function GET(request: NextRequest) {
     { header: "หมายเหตุ", key: "note", width: 24 },
   ];
 
-  sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
-  sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFC81E1E" } };
+  sheet.getRow(1).font = { bold: true, color: { argb: "FF1F2937" } };
+  sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF3F4F6" } };
+  sheet.getRow(1).border = { bottom: { style: "thin", color: { argb: "FFD1D5DB" } } };
 
   for (const r of rows) {
     sheet.addRow({

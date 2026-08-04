@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ThaiDateSelect } from "@/components/thai-date-select";
+import { CalendarDatePicker } from "@/components/calendar-date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,7 @@ const PERIOD_OPTIONS: { value: LeavePeriodClient; label: string }[] = [
 interface LeaveRequestFormProps {
   mode: "create" | "edit";
   leaveTypes: Pick<LeaveType, "id" | "name" | "color">[];
-  holidayDates: string[];
+  holidays: { holiday_date: string; name: string }[];
   currentUserRole: UserRole;
   existing?: LeaveRequest;
 }
@@ -27,11 +27,13 @@ interface LeaveRequestFormProps {
 export function LeaveRequestForm({
   mode,
   leaveTypes,
-  holidayDates,
+  holidays,
   currentUserRole,
   existing,
 }: LeaveRequestFormProps) {
   const router = useRouter();
+  const holidayDates = useMemo(() => holidays.map((h) => h.holiday_date), [holidays]);
+  const holidayMap = useMemo(() => new Map(holidays.map((h) => [h.holiday_date, h.name])), [holidays]);
 
   const [leaveTypeId, setLeaveTypeId] = useState(existing?.leave_type_id ?? leaveTypes[0]?.id ?? "");
   const [startDate, setStartDate] = useState(existing?.start_date ?? todayIso());
@@ -161,14 +163,15 @@ export function LeaveRequestForm({
 
         <div className="space-y-2">
           <Label>วันที่เริ่มลา</Label>
-          <ThaiDateSelect value={startDate} onChange={handleStartDateChange} disabled={busy} />
+          <CalendarDatePicker value={startDate} onChange={handleStartDateChange} holidays={holidayMap} disabled={busy} />
         </div>
 
         <div className="space-y-2">
           <Label>วันที่สิ้นสุด</Label>
-          <ThaiDateSelect
+          <CalendarDatePicker
             value={endDate}
             onChange={(iso) => setEndDate(iso < startDate ? startDate : iso)}
+            holidays={holidayMap}
             disabled={busy}
           />
         </div>
@@ -221,9 +224,11 @@ export function LeaveRequestForm({
           <Button onClick={handleSaveDraft} disabled={busy} variant="outline" className="flex-1">
             {submitting === "draft" ? "กำลังบันทึก..." : "บันทึกร่าง"}
           </Button>
-          <Button onClick={handleSubmitForApproval} disabled={busy} className="flex-1">
-            {submitting === "submit" ? "กำลังส่ง..." : "ส่งอนุมัติ"}
-          </Button>
+          {!canApproveOwn && (
+            <Button onClick={handleSubmitForApproval} disabled={busy} className="flex-1">
+              {submitting === "submit" ? "กำลังส่ง..." : "ส่งอนุมัติ"}
+            </Button>
+          )}
         </div>
       </div>
     </div>

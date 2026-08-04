@@ -20,13 +20,13 @@ export default async function SelectTeamPage() {
   return (
     <main className="flex flex-1 flex-col items-center justify-center gap-6 bg-white p-6">
       <div className="flex flex-col items-center gap-2 text-center">
-        <h1 className="text-xl font-semibold text-foreground">เลือกทีมของคุณ</h1>
+        <h1 className="text-xl font-semibold text-foreground">ยินดีต้อนรับ</h1>
         <p className="text-sm text-muted-foreground">
-          กรุณาเลือกทีมก่อนเริ่มใช้งานระบบ (แก้ไขภายหลังได้ที่หน้าโปรไฟล์)
+          กรุณากรอกชื่อและเลือกทีมก่อนเริ่มใช้งานระบบ (แก้ไขภายหลังได้ที่หน้าโปรไฟล์)
         </p>
       </div>
 
-      <TeamSelectForm teams={teams ?? []} />
+      <TeamSelectForm teams={teams ?? []} currentFullName={appUser.full_name} />
     </main>
   );
 }

@@ -21,7 +21,7 @@ export default async function EditLeaveRequestPage({ params }: { params: { id: s
 
   const [{ data: leaveTypes }, { data: holidays }] = await Promise.all([
     supabase.from("leave_types").select("id, name, color").eq("is_active", true).order("name"),
-    supabase.from("holidays").select("holiday_date"),
+    supabase.from("holidays").select("holiday_date, name"),
   ]);
 
   return (
@@ -33,7 +33,7 @@ export default async function EditLeaveRequestPage({ params }: { params: { id: s
         mode="edit"
         existing={leaveRequest}
         leaveTypes={leaveTypes ?? []}
-        holidayDates={(holidays ?? []).map((h) => h.holiday_date)}
+        holidays={holidays ?? []}
         currentUserRole={appUser.role}
       />
     </main>

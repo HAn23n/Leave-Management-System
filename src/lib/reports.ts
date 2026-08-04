@@ -22,9 +22,9 @@ const VALID_STATUSES: LeaveStatus[] = ["draft", "pending", "approved", "rejected
 export function buildReportQuery(supabase: SupabaseClient<Database>, filters: ReportFilters) {
   let query = supabase.from("leave_requests").select("*").order("start_date", { ascending: false });
 
-  if (filters.userId) query = query.eq("user_id", filters.userId);
-  if (filters.teamId) query = query.eq("team_id", filters.teamId);
-  if (filters.leaveTypeId) query = query.eq("leave_type_id", filters.leaveTypeId);
+  if (filters.userId && filters.userId !== "all") query = query.eq("user_id", filters.userId);
+  if (filters.teamId && filters.teamId !== "all") query = query.eq("team_id", filters.teamId);
+  if (filters.leaveTypeId && filters.leaveTypeId !== "all") query = query.eq("leave_type_id", filters.leaveTypeId);
   if (filters.status && (VALID_STATUSES as string[]).includes(filters.status)) {
     query = query.eq("status", filters.status as LeaveStatus);
   }

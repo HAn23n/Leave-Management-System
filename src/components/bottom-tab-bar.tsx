@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { PRIMARY_NAV_ITEMS, isNavItemActive } from "./nav-items";
+import { isNavItemActive, type NavItem } from "./nav-items";
 import { NavIcon } from "./nav-icon";
 import { cn } from "@/lib/utils";
 
 // Mobile-only bottom tab bar, hidden on desktop (md breakpoint) in favor of the sidebar.
-export function BottomTabBar() {
+export function BottomTabBar({ items }: { items: NavItem[] }) {
   const pathname = usePathname();
 
   return (
@@ -15,8 +15,8 @@ export function BottomTabBar() {
       className="fixed inset-x-0 bottom-0 z-40 flex h-16 border-t border-border bg-white md:hidden"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
-      {PRIMARY_NAV_ITEMS.map((item) => {
-        const active = isNavItemActive(pathname, PRIMARY_NAV_ITEMS, item);
+      {items.map((item) => {
+        const active = isNavItemActive(pathname, items, item);
         return (
           <Link
             key={item.href}

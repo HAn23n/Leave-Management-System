@@ -59,9 +59,11 @@ export default async function LeaveRequestsSearchPage({
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 p-4 pb-24">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold text-foreground">ค้นหาบันทึกการลา</h1>
-        <Button asChild size="sm">
-          <Link href="/leave-requests/new">+ บันทึกการลา</Link>
-        </Button>
+        {appUser.role !== "approver" && (
+          <Button asChild size="sm">
+            <Link href="/leave-requests/new">+ บันทึกการลา</Link>
+          </Button>
+        )}
       </div>
 
       <form method="get" className="grid grid-cols-2 gap-3 md:grid-cols-4">

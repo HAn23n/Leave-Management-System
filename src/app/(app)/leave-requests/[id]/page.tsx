@@ -101,7 +101,7 @@ export default async function LeaveRequestDetailPage({ params }: { params: { id:
         </CardContent>
       </Card>
 
-      {isOwner && (leaveRequest.status === "draft" || leaveRequest.status === "returned") && (
+      {isOwner && appUser.role !== "approver" && (leaveRequest.status === "draft" || leaveRequest.status === "returned") && (
         <Button asChild variant="outline">
           <Link href={`/leave-requests/${leaveRequest.id}/edit`}>แก้ไข</Link>
         </Button>

@@ -129,7 +129,21 @@ export function CalendarDatePicker({
       </button>
 
       {open && (
-        <div className="absolute z-50 mt-1 w-72 rounded-2xl border border-border bg-white p-3 shadow-lg">
+        <>
+          {/* Mobile-only dimmed backdrop — purely visual, the click-outside
+              listener above already closes on any click outside this
+              container regardless of where the panel renders. */}
+          <div className="fixed inset-0 z-40 bg-black/30 sm:hidden" aria-hidden />
+          {/*
+            A fixed-width `absolute` popover anchored to the trigger's left
+            edge overflows the viewport on mobile whenever the trigger sits
+            in the right half of a narrow screen (e.g. a 2-column filter
+            grid) — w-72 (288px) has nowhere to go but off-screen. Below
+            `sm`, render it as a centered fixed panel instead (inset-x-4,
+            vertically centered); at `sm` and up, revert to the original
+            anchored dropdown via top/left/width overrides.
+          */}
+          <div className="fixed inset-x-4 top-1/2 z-50 max-h-[80vh] -translate-y-1/2 overflow-y-auto rounded-2xl border border-border bg-white p-3 shadow-lg sm:absolute sm:inset-x-auto sm:left-0 sm:top-auto sm:z-50 sm:mt-1 sm:w-72 sm:max-h-none sm:translate-y-0 sm:overflow-visible">
           <div className="flex items-center justify-between pb-2">
             <button
               type="button"
@@ -293,7 +307,8 @@ export function CalendarDatePicker({
           })()}
           </>
           )}
-        </div>
+          </div>
+        </>
       )}
     </div>
   );

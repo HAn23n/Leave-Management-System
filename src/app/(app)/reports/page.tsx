@@ -30,9 +30,17 @@ export default async function ReportsPage({ searchParams }: { searchParams: Repo
   ]);
   const holidayMap = new Map((holidayRows ?? []).map((h) => [h.holiday_date, h.name]));
 
+  // Reports are mostly pulled for payroll/HR purposes, where "approved" is
+  // the status that actually matters — default the filter (and the Excel
+  // export it drives) to it instead of "ทุกสถานะ" until the admin changes it.
+  const statusDefault = searchParams.status ?? "approved";
+
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(searchParams)) {
     if (value && value !== "all") query.set(key, String(value));
+  }
+  if (!searchParams.status) {
+    query.set("status", "approved");
   }
 
   return (
@@ -97,7 +105,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Repo
 
         <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground">สถานะ</Label>
-          <Select name="status" defaultValue={searchParams.status ?? "all"}>
+          <Select name="status" defaultValue={statusDefault}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>

@@ -31,8 +31,17 @@ export default async function LeaveRequestsSearchPage({
     .select("*")
     .order("created_at", { ascending: false });
 
-  const validStatuses = Object.keys(STATUS_LABEL_TH) as LeaveStatus[];
-  if (searchParams.status && (validStatuses as string[]).includes(searchParams.status)) {
+  // Approvers only ever review documents that were actually submitted —
+  // a teammate's still-private draft isn't theirs to see, even though RLS
+  // (scoped by team, not status) would otherwise let the row through.
+  if (appUser.role === "approver") {
+    query = query.neq("status", "draft");
+  }
+
+  const statusOptions = (Object.keys(STATUS_LABEL_TH) as LeaveStatus[]).filter(
+    (s) => appUser.role !== "approver" || s !== "draft"
+  );
+  if (searchParams.status && (statusOptions as string[]).includes(searchParams.status)) {
     query = query.eq("status", searchParams.status as LeaveStatus);
   }
   if (searchParams.leave_type_id && searchParams.leave_type_id !== "all") {
@@ -78,7 +87,7 @@ export default async function LeaveRequestsSearchPage({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">ทุกสถานะ</SelectItem>
-              {(Object.keys(STATUS_LABEL_TH) as LeaveStatus[]).map((s) => (
+              {statusOptions.map((s) => (
                 <SelectItem key={s} value={s}>
                   {STATUS_LABEL_TH[s]}
                 </SelectItem>

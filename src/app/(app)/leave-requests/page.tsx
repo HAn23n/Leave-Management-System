@@ -120,7 +120,7 @@ export default async function LeaveRequestsSearchPage({
           />
         </div>
 
-        <Button type="submit" variant="outline" size="sm" className="col-span-2 md:col-span-4">
+        <Button type="submit" size="sm" className="col-span-2 md:col-span-4">
           <Search className="h-4 w-4" />
           ค้นหา
         </Button>

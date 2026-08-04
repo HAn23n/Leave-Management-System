@@ -4,7 +4,7 @@ import { STATUS_LABEL_TH } from "@/lib/status";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Download } from "lucide-react";
+import { Download, Search } from "lucide-react";
 import type { LeaveStatus } from "@/lib/supabase/types";
 
 interface ReportSearchParams {
@@ -128,7 +128,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Repo
           />
         </div>
 
-        <Button type="submit" variant="outline" size="sm" className="col-span-2 md:col-span-4">
+        <Button type="submit" size="sm" className="col-span-2 md:col-span-4">
+          <Search className="h-4 w-4" />
           กรอง
         </Button>
       </form>

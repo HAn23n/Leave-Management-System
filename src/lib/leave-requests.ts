@@ -15,8 +15,10 @@ interface TransitionParams {
 interface TransitionResult {
   ok: boolean;
   request?: LeaveRequest;
-  /** "not_found" = no row with that id/scope, "conflict" = optimistic-lock mismatch (status already moved) */
-  reason?: "not_found" | "conflict";
+  /** "not_found" = no row with that id/scope, "conflict" = optimistic-lock mismatch (status already moved), "db_error" = a trigger/constraint rejected the write (e.g. overlap) */
+  reason?: "not_found" | "conflict" | "db_error";
+  /** Set on "db_error" — the actual Postgres/trigger message (already Thai), safe to show the user directly. */
+  message?: string;
 }
 
 /**
@@ -47,7 +49,9 @@ export async function transitionLeaveRequest({
     .maybeSingle();
 
   if (error) {
-    throw error;
+    // A trigger (e.g. the overlap check) rejected the write — its message is
+    // already a user-facing Thai string, safe to surface directly.
+    return { ok: false, reason: "db_error", message: error.message };
   }
 
   if (!data) {

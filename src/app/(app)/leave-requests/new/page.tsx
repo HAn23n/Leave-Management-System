@@ -9,9 +9,14 @@ export default async function NewLeaveRequestPage() {
   if (appUser.role === "approver") redirect("/leave-requests");
   const supabase = createServerSupabaseClient();
 
-  const [{ data: leaveTypes }, { data: holidays }] = await Promise.all([
+  const [{ data: leaveTypes }, { data: holidays }, { data: existingLeave }] = await Promise.all([
     supabase.from("leave_types").select("id, name, color").eq("is_active", true).order("name"),
     supabase.from("holidays").select("holiday_date, name"),
+    supabase
+      .from("leave_requests")
+      .select("start_date, end_date, start_period, end_period")
+      .eq("user_id", appUser.id)
+      .in("status", ["pending", "approved"]),
   ]);
 
   return (
@@ -23,6 +28,7 @@ export default async function NewLeaveRequestPage() {
         mode="create"
         leaveTypes={leaveTypes ?? []}
         holidays={holidays ?? []}
+        existingLeave={existingLeave ?? []}
         currentUserRole={appUser.role}
       />
     </main>

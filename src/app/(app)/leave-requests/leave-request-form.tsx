@@ -8,6 +8,8 @@ import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { calcTotalDaysClient, todayIso, type LeavePeriodClient } from "@/lib/date";
+import { buildOccupiedDates, type ExistingLeaveRange } from "@/lib/leave-overlap";
+import { toast } from "@/hooks/use-toast";
 import type { LeaveRequest, LeaveType, UserRole } from "@/lib/supabase/types";
 
 const PERIOD_OPTIONS: { value: LeavePeriodClient; label: string }[] = [
@@ -20,6 +22,7 @@ interface LeaveRequestFormProps {
   mode: "create" | "edit";
   leaveTypes: Pick<LeaveType, "id" | "name" | "color">[];
   holidays: { holiday_date: string; name: string }[];
+  existingLeave: ExistingLeaveRange[];
   currentUserRole: UserRole;
   existing?: LeaveRequest;
 }
@@ -28,12 +31,14 @@ export function LeaveRequestForm({
   mode,
   leaveTypes,
   holidays,
+  existingLeave,
   currentUserRole,
   existing,
 }: LeaveRequestFormProps) {
   const router = useRouter();
   const holidayDates = useMemo(() => holidays.map((h) => h.holiday_date), [holidays]);
   const holidayMap = useMemo(() => new Map(holidays.map((h) => [h.holiday_date, h.name])), [holidays]);
+  const occupiedDates = useMemo(() => buildOccupiedDates(existingLeave), [existingLeave]);
 
   const [leaveTypeId, setLeaveTypeId] = useState(existing?.leave_type_id ?? leaveTypes[0]?.id ?? "");
   const [startDate, setStartDate] = useState(existing?.start_date ?? todayIso());
@@ -87,7 +92,10 @@ export function LeaveRequestForm({
 
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setError(body.error === "invalid_input" ? "กรุณาตรวจสอบข้อมูลที่กรอก" : "บันทึกไม่สำเร็จ กรุณาลองใหม่อีกครั้ง");
+      const message =
+        body.message ?? (body.error === "invalid_input" ? "กรุณาตรวจสอบข้อมูลที่กรอก" : "บันทึกไม่สำเร็จ กรุณาลองใหม่อีกครั้ง");
+      setError(message);
+      toast({ variant: "destructive", title: "บันทึกไม่สำเร็จ", description: message });
       return null;
     }
     return body.request.id as string;
@@ -99,6 +107,7 @@ export function LeaveRequestForm({
     const id = await saveDraftOrUpdate();
     setSubmitting(null);
     if (id) {
+      toast({ variant: "success", title: "บันทึกร่างแล้ว" });
       router.push(`/leave-requests/${id}`);
       router.refresh();
     }
@@ -115,9 +124,13 @@ export function LeaveRequestForm({
     const res = await fetch(`/api/leave-requests/${id}/submit`, { method: "POST" });
     setSubmitting(null);
     if (!res.ok) {
-      setError("ส่งอนุมัติไม่สำเร็จ กรุณาลองใหม่อีกครั้ง");
+      const body = await res.json().catch(() => ({}));
+      const message = body.message ?? "ส่งอนุมัติไม่สำเร็จ กรุณาลองใหม่อีกครั้ง";
+      setError(message);
+      toast({ variant: body.error === "db_error" ? "warning" : "destructive", title: "ส่งอนุมัติไม่สำเร็จ", description: message });
       return;
     }
+    toast({ variant: "success", title: "ส่งอนุมัติแล้ว" });
     router.push(`/leave-requests/${id}`);
     router.refresh();
   }
@@ -133,9 +146,13 @@ export function LeaveRequestForm({
     const res = await fetch(`/api/leave-requests/${id}/approve-own`, { method: "POST" });
     setSubmitting(null);
     if (!res.ok) {
-      setError("บันทึกและอนุมัติไม่สำเร็จ กรุณาลองใหม่อีกครั้ง");
+      const body = await res.json().catch(() => ({}));
+      const message = body.message ?? "บันทึกและอนุมัติไม่สำเร็จ กรุณาลองใหม่อีกครั้ง";
+      setError(message);
+      toast({ variant: body.error === "db_error" ? "warning" : "destructive", title: "บันทึกและอนุมัติไม่สำเร็จ", description: message });
       return;
     }
+    toast({ variant: "success", title: "บันทึกและอนุมัติแล้ว" });
     router.push(`/leave-requests/${id}`);
     router.refresh();
   }
@@ -163,7 +180,13 @@ export function LeaveRequestForm({
 
         <div className="space-y-2">
           <Label>วันที่เริ่มลา</Label>
-          <CalendarDatePicker value={startDate} onChange={handleStartDateChange} holidays={holidayMap} disabled={busy} />
+          <CalendarDatePicker
+            value={startDate}
+            onChange={handleStartDateChange}
+            holidays={holidayMap}
+            occupiedDates={occupiedDates}
+            disabled={busy}
+          />
         </div>
 
         <div className="space-y-2">
@@ -172,6 +195,8 @@ export function LeaveRequestForm({
             value={endDate}
             onChange={(iso) => setEndDate(iso < startDate ? startDate : iso)}
             holidays={holidayMap}
+            occupiedDates={occupiedDates}
+            minDate={startDate}
             disabled={busy}
           />
         </div>

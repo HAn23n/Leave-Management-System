@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CalendarDateField } from "@/components/calendar-date-field";
+import { DateRangeFields } from "@/components/date-range-fields";
 import { Search } from "lucide-react";
 import type { LeaveStatus } from "@/lib/supabase/types";
 
@@ -113,14 +113,13 @@ export default async function LeaveRequestsSearchPage({
           </Select>
         </div>
 
-        <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground">ตั้งแต่วันที่</Label>
-          <CalendarDateField name="from" defaultValue={searchParams.from} holidays={holidayMap} />
-        </div>
-        <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground">ถึงวันที่</Label>
-          <CalendarDateField name="to" defaultValue={searchParams.to} holidays={holidayMap} />
-        </div>
+        <DateRangeFields
+          fromName="from"
+          toName="to"
+          fromDefault={searchParams.from}
+          toDefault={searchParams.to}
+          holidays={holidayMap}
+        />
 
         <Button type="submit" size="sm" className="col-span-2 md:col-span-4">
           <Search className="h-4 w-4" />

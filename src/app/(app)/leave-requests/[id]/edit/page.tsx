@@ -21,9 +21,15 @@ export default async function EditLeaveRequestPage({ params }: { params: { id: s
   // Approvers only review/approve documents — they never submit/edit their own leave requests.
   if (appUser.role === "approver") redirect(`/leave-requests/${params.id}`);
 
-  const [{ data: leaveTypes }, { data: holidays }] = await Promise.all([
+  const [{ data: leaveTypes }, { data: holidays }, { data: existingLeave }] = await Promise.all([
     supabase.from("leave_types").select("id, name, color").eq("is_active", true).order("name"),
     supabase.from("holidays").select("holiday_date, name"),
+    supabase
+      .from("leave_requests")
+      .select("start_date, end_date, start_period, end_period")
+      .eq("user_id", appUser.id)
+      .neq("id", leaveRequest.id)
+      .in("status", ["pending", "approved"]),
   ]);
 
   return (
@@ -36,6 +42,7 @@ export default async function EditLeaveRequestPage({ params }: { params: { id: s
         existing={leaveRequest}
         leaveTypes={leaveTypes ?? []}
         holidays={holidays ?? []}
+        existingLeave={existingLeave ?? []}
         currentUserRole={appUser.role}
       />
     </main>

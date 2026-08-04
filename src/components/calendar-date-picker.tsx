@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { DayOccupancy } from "@/lib/leave-overlap";
 
 const WEEKDAY_LABELS = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
 const MONTH_NAMES = [
@@ -10,6 +11,11 @@ const MONTH_NAMES = [
   "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม",
 ];
 const THAI_YEAR_OFFSET = 543;
+const OCCUPIED_LABEL: Record<DayOccupancy, string> = {
+  full: "มีคำขอลาเต็มวันแล้ว",
+  morning: "มีคำขอลาช่วงเช้าแล้ว",
+  afternoon: "มีคำขอลาช่วงบ่ายแล้ว",
+};
 
 function toIso(year: number, month: number, day: number): string {
   return `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
@@ -27,6 +33,9 @@ export function CalendarDatePicker({
   holidays,
   disabled,
   name,
+  minDate,
+  maxDate,
+  occupiedDates,
 }: {
   value: string | null;
   onChange: (isoDate: string) => void;
@@ -34,6 +43,12 @@ export function CalendarDatePicker({
   disabled?: boolean;
   /** Renders a hidden input so the picked date participates in a native <form> submit (GET filters, server actions). */
   name?: string;
+  /** ISO date (inclusive) — earlier dates render disabled. */
+  minDate?: string;
+  /** ISO date (inclusive) — later dates render disabled. */
+  maxDate?: string;
+  /** Per-date occupancy from the user's own existing leave — 'full' disables the date, a half-day only marks it. */
+  occupiedDates?: Map<string, DayOccupancy>;
 }) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -148,15 +163,26 @@ export function CalendarDatePicker({
               const isToday = iso === todayIso;
               const dow = (leadingBlanks + day - 1) % 7;
               const isWeekend = dow === 0 || dow === 6;
+              const occupancy = occupiedDates?.get(iso);
+              const isFullyBooked = occupancy === "full";
+              const outOfRange = (minDate && iso < minDate) || (maxDate && iso > maxDate);
+              const isDisabled = isFullyBooked || outOfRange;
+              const title = isFullyBooked
+                ? OCCUPIED_LABEL.full
+                : occupancy
+                  ? OCCUPIED_LABEL[occupancy]
+                  : holidayName;
 
               return (
                 <button
                   key={iso}
                   type="button"
-                  title={holidayName}
+                  title={title}
+                  disabled={isDisabled}
                   onClick={() => pick(day)}
                   className={cn(
                     "flex aspect-square flex-col items-center justify-center rounded-lg text-xs font-medium transition-colors",
+                    isDisabled && "cursor-not-allowed opacity-40 hover:bg-transparent",
                     isSelected
                       ? "gradient-primary text-primary-foreground"
                       : holidayName
@@ -168,8 +194,13 @@ export function CalendarDatePicker({
                   )}
                 >
                   <span>{day}</span>
-                  {holidayName && !isSelected && (
-                    <span className="mt-0.5 h-1 w-1 rounded-full bg-muted-foreground" />
+                  {(holidayName || occupancy) && !isSelected && (
+                    <span
+                      className={cn(
+                        "mt-0.5 h-1 w-1 rounded-full",
+                        occupancy && !isFullyBooked ? "bg-primary" : "bg-muted-foreground"
+                      )}
+                    />
                   )}
                 </button>
               );

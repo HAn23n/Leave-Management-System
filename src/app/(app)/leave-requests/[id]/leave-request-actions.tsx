@@ -3,9 +3,18 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { toast } from "@/hooks/use-toast";
 import type { LeaveStatus, UserRole } from "@/lib/supabase/types";
 
 type NoteAction = "reject" | "return" | null;
+
+const SUCCESS_TITLE: Record<string, string> = {
+  submit: "ส่งอนุมัติแล้ว",
+  approve: "อนุมัติแล้ว",
+  reject: "ไม่อนุมัติเอกสารแล้ว",
+  return: "ส่งคืนเอกสารแล้ว",
+  cancel: "ยกเลิกคำขอลาแล้ว",
+};
 
 export function LeaveRequestActions({
   requestId,
@@ -37,15 +46,18 @@ export function LeaveRequestActions({
     setBusy(false);
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      setError(
-        data.error === "conflict"
+      const message =
+        data.message ??
+        (data.error === "conflict"
           ? "สถานะของเอกสารถูกเปลี่ยนไปแล้ว กรุณาโหลดหน้าใหม่"
           : data.error === "note_required"
             ? "กรุณาระบุเหตุผล"
-            : "ดำเนินการไม่สำเร็จ กรุณาลองใหม่อีกครั้ง"
-      );
+            : "ดำเนินการไม่สำเร็จ กรุณาลองใหม่อีกครั้ง");
+      setError(message);
+      toast({ variant: data.error === "db_error" ? "warning" : "destructive", title: "ดำเนินการไม่สำเร็จ", description: message });
       return;
     }
+    toast({ variant: "success", title: SUCCESS_TITLE[path] ?? "ดำเนินการสำเร็จ" });
     setNoteAction(null);
     setNote("");
     router.refresh();

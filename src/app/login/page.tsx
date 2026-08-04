@@ -17,6 +17,9 @@ export default function LoginPage() {
       provider: "google",
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
+        // Without this, Google silently re-authenticates whichever account is
+        // already active in the browser instead of showing the account picker.
+        queryParams: { prompt: "select_account" },
       },
     });
     if (signInError) {

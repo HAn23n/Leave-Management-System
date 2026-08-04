@@ -165,7 +165,7 @@ export function CalendarDatePicker({
               const isWeekend = dow === 0 || dow === 6;
               const occupancy = occupiedDates?.get(iso);
               const isFullyBooked = occupancy === "full";
-              const outOfRange = (minDate && iso < minDate) || (maxDate && iso > maxDate);
+              const outOfRange = Boolean((minDate && iso < minDate) || (maxDate && iso > maxDate));
               const isDisabled = isFullyBooked || outOfRange;
               const title = isFullyBooked
                 ? OCCUPIED_LABEL.full

@@ -3,6 +3,7 @@ import { getCurrentAppUser } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { leaveRequestInputSchema } from "@/lib/validation/leave-request";
 import { rateLimitResponse } from "@/lib/rate-limit";
+import { safeDbErrorMessage } from "@/lib/db-error";
 
 export async function POST(request: NextRequest) {
   const appUser = await getCurrentAppUser();
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json({ error: safeDbErrorMessage(error) }, { status: 400 });
   }
 
   return NextResponse.json({ request: data }, { status: 201 });

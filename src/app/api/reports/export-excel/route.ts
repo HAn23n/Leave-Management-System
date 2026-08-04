@@ -6,6 +6,7 @@ import { buildReportQuery, loadReportLookups } from "@/lib/reports";
 import { formatThaiDate } from "@/lib/date";
 import { STATUS_LABEL_TH, PERIOD_LABEL_TH } from "@/lib/status";
 import { rateLimitResponse } from "@/lib/rate-limit";
+import { safeDbErrorMessage } from "@/lib/db-error";
 
 export async function GET(request: NextRequest) {
   const appUser = await getCurrentAppUser();
@@ -28,7 +29,7 @@ export async function GET(request: NextRequest) {
   });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json({ error: safeDbErrorMessage(error) }, { status: 400 });
   }
 
   const rows = requests ?? [];

@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AppUser, Database, LeaveRequest, LeaveStatus } from "@/lib/supabase/types";
 import { notifyLeaveDecision } from "@/lib/email";
+import { safeDbErrorMessage } from "@/lib/db-error";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -68,18 +69,7 @@ export async function transitionLeaveRequest({
     .maybeSingle();
 
   if (error) {
-    // Only trust the message when it's our own RAISE EXCEPTION (Postgres
-    // gives plain `RAISE EXCEPTION 'text'` the SQLSTATE P0001) — those are
-    // hand-written, already-Thai, user-facing strings (the overlap check,
-    // the field-ownership guard, etc). Anything else could be a raw
-    // Postgres/RLS error exposing table, column, or constraint names, so it
-    // gets a generic fallback instead of being echoed back to the client.
-    const isBusinessRuleError = error.code === "P0001";
-    return {
-      ok: false,
-      reason: "db_error",
-      message: isBusinessRuleError ? error.message : "บันทึกไม่สำเร็จ กรุณาลองใหม่อีกครั้ง",
-    };
+    return { ok: false, reason: "db_error", message: safeDbErrorMessage(error) };
   }
 
   if (!data) {

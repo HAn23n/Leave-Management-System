@@ -3,6 +3,7 @@ import { getCurrentAppUser } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { leaveRequestInputSchema } from "@/lib/validation/leave-request";
 import { rateLimitResponse } from "@/lib/rate-limit";
+import { safeDbErrorMessage } from "@/lib/db-error";
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   const appUser = await getCurrentAppUser();
@@ -42,7 +43,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     .maybeSingle();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json({ error: safeDbErrorMessage(error) }, { status: 400 });
   }
   if (!data) {
     return NextResponse.json({ error: "not_editable" }, { status: 409 });

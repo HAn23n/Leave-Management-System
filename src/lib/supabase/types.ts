@@ -64,15 +64,6 @@ export interface Holiday {
   created_at: string;
 }
 
-export interface LeaveBalance {
-  id: string;
-  user_id: string;
-  leave_type_id: string;
-  year: number;
-  quota_days: number;
-  used_days: number;
-}
-
 export interface LeaveRequest {
   id: string;
   request_no: string | null;
@@ -125,7 +116,6 @@ export interface Database {
       approver_mappings: Table<ApproverMapping>;
       leave_types: Table<LeaveType>;
       holidays: Table<Holiday>;
-      leave_balances: Table<LeaveBalance>;
       leave_requests: Table<LeaveRequest>;
       leave_request_logs: Table<LeaveRequestLog>;
     };

@@ -135,7 +135,17 @@ export async function decideOnPendingRequest({
   }
 
   const maxLevel = chain.type === "override" ? 1 : chain.levels.length;
-  const isLastLevel = chain.type === "override" || actor.role === "admin" || current.current_level >= maxLevel;
+  // An admin who happens to also be the chain's assigned approver at the
+  // current level (e.g. explicitly set as ลำดับ 1) still hands off to the
+  // next level like anyone else — admin's instant-finalize power is for
+  // acting outside/out-of-turn on the chain, not for skipping levels they
+  // were deliberately placed in.
+  const actingAtOwnChainTurn =
+    chain.type === "chain" && chain.levels.some((l) => l.level === current.current_level && l.approver.id === actor.id);
+  const isLastLevel =
+    chain.type === "override" ||
+    (actor.role === "admin" && !actingAtOwnChainTurn) ||
+    current.current_level >= maxLevel;
 
   if (decision === "approved" && !isLastLevel) {
     const { data, error } = await supabase

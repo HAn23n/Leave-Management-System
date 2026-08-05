@@ -3,7 +3,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { createLeaveType, setLeaveTypeActive } from "./actions";
+import { createLeaveType, setLeaveTypeActive, setLeaveTypeRequireReason } from "./actions";
 
 export default async function LeaveTypesSettingsPage() {
   await requireAdmin();
@@ -21,19 +21,29 @@ export default async function LeaveTypesSettingsPage() {
 
       <div className="flex flex-col gap-2">
         {(leaveTypes ?? []).map((lt) => (
-          <div key={lt.id} className="flex items-center justify-between rounded-lg border border-border bg-white p-3">
-            <div className="flex items-center gap-2">
-              <span className="h-4 w-4 rounded-full" style={{ backgroundColor: lt.color }} />
-              <span className="font-medium text-foreground">{lt.name}</span>
-              <Badge variant={lt.is_active ? "success" : "secondary"}>
-                {lt.is_active ? "ใช้งาน" : "ปิดใช้งาน"}
-              </Badge>
+          <div key={lt.id} className="flex flex-col gap-2 rounded-lg border border-border bg-white p-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="h-4 w-4 rounded-full" style={{ backgroundColor: lt.color }} />
+                <span className="font-medium text-foreground">{lt.name}</span>
+                <Badge variant={lt.is_active ? "success" : "secondary"}>
+                  {lt.is_active ? "ใช้งาน" : "ปิดใช้งาน"}
+                </Badge>
+              </div>
+              <form action={setLeaveTypeActive}>
+                <input type="hidden" name="id" value={lt.id} />
+                <input type="hidden" name="is_active" value={(!lt.is_active).toString()} />
+                <Button type="submit" size="sm" variant="outline">
+                  {lt.is_active ? "ปิดใช้งาน" : "เปิดใช้งาน"}
+                </Button>
+              </form>
             </div>
-            <form action={setLeaveTypeActive}>
+            <form action={setLeaveTypeRequireReason} className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">บังคับกรอกเหตุผล</span>
               <input type="hidden" name="id" value={lt.id} />
-              <input type="hidden" name="is_active" value={(!lt.is_active).toString()} />
-              <Button type="submit" size="sm" variant="outline">
-                {lt.is_active ? "ปิดใช้งาน" : "เปิดใช้งาน"}
+              <input type="hidden" name="require_reason" value={(!lt.require_reason).toString()} />
+              <Button type="submit" size="sm" variant={lt.require_reason ? "default" : "outline"}>
+                {lt.require_reason ? "บังคับอยู่" : "ไม่บังคับ"}
               </Button>
             </form>
           </div>

@@ -22,7 +22,7 @@ const PERIOD_OPTIONS: { value: LeavePeriodClient; label: string }[] = [
 
 interface LeaveRequestFormProps {
   mode: "create" | "edit";
-  leaveTypes: Pick<LeaveType, "id" | "name" | "color">[];
+  leaveTypes: Pick<LeaveType, "id" | "name" | "color" | "require_reason">[];
   holidays: { holiday_date: string; name: string }[];
   existingLeave: ExistingLeaveRange[];
   currentUserRole: UserRole;
@@ -67,6 +67,7 @@ export function LeaveRequestForm({
 
   const isSingleDay = startDate === endDate;
   const canApproveOwn = currentUserRole === "approver" || currentUserRole === "admin";
+  const reasonRequired = leaveTypes.find((lt) => lt.id === leaveTypeId)?.require_reason ?? false;
 
   const previewDays = useMemo(
     () => calcTotalDaysClient(startDate, endDate, startPeriod, isSingleDay ? startPeriod : endPeriod, holidayDates),
@@ -84,6 +85,13 @@ export function LeaveRequestForm({
   }
 
   async function saveDraftOrUpdate(): Promise<{ id: string; requestNo: string } | null> {
+    if (reasonRequired && !reason.trim()) {
+      const message = "ประเภทการลานี้ต้องระบุเหตุผล";
+      setError(message);
+      toast({ variant: "destructive", title: "บันทึกไม่สำเร็จ", description: message });
+      return null;
+    }
+
     const payload = {
       leave_type_id: leaveTypeId,
       start_date: startDate,
@@ -239,7 +247,10 @@ export function LeaveRequestForm({
         )}
 
         <div className="space-y-2">
-          <Label>เหตุผล</Label>
+          <Label>
+            เหตุผล
+            {reasonRequired && <span className="text-destructive"> *</span>}
+          </Label>
           <textarea
             value={reason}
             onChange={(e) => setReason(e.target.value)}

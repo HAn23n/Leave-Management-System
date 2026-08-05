@@ -10,7 +10,7 @@ export default async function NewLeaveRequestPage() {
   const supabase = createServerSupabaseClient();
 
   const [{ data: leaveTypes }, { data: holidays }, { data: existingLeave }] = await Promise.all([
-    supabase.from("leave_types").select("id, name, color").eq("is_active", true).order("name"),
+    supabase.from("leave_types").select("id, name, color, require_reason").eq("is_active", true).order("name"),
     supabase.from("holidays").select("holiday_date, name"),
     supabase
       .from("leave_requests")

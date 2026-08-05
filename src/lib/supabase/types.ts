@@ -53,6 +53,7 @@ export interface LeaveType {
   name: string;
   color: string;
   is_active: boolean;
+  require_reason: boolean;
   created_at: string;
 }
 

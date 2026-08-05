@@ -40,3 +40,13 @@ export async function setLeaveTypeActive(formData: FormData) {
   await supabase.from("leave_types").update({ is_active: isActive }).eq("id", id);
   revalidatePath("/settings/leave-types");
 }
+
+export async function setLeaveTypeRequireReason(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id"));
+  const requireReason = formData.get("require_reason") === "true";
+
+  const supabase = createServerSupabaseClient();
+  await supabase.from("leave_types").update({ require_reason: requireReason }).eq("id", id);
+  revalidatePath("/settings/leave-types");
+}

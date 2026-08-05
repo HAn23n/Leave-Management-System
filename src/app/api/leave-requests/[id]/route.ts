@@ -26,6 +26,19 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
 
   const supabase = createServerSupabaseClient();
+
+  const { data: leaveType } = await supabase
+    .from("leave_types")
+    .select("require_reason")
+    .eq("id", parsed.data.leave_type_id)
+    .maybeSingle();
+  if (leaveType?.require_reason && !parsed.data.reason.trim()) {
+    return NextResponse.json(
+      { error: "invalid_input", message: "ประเภทการลานี้ต้องระบุเหตุผล" },
+      { status: 400 }
+    );
+  }
+
   const { data, error } = await supabase
     .from("leave_requests")
     .update({

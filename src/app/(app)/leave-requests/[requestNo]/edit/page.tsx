@@ -23,7 +23,7 @@ export default async function EditLeaveRequestPage({ params }: { params: { reque
   if (appUser.role === "approver") redirect(canonicalPath);
 
   const [{ data: leaveTypes }, { data: holidays }, { data: existingLeave }] = await Promise.all([
-    supabase.from("leave_types").select("id, name, color").eq("is_active", true).order("name"),
+    supabase.from("leave_types").select("id, name, color, require_reason").eq("is_active", true).order("name"),
     supabase.from("holidays").select("holiday_date, name"),
     supabase
       .from("leave_requests")

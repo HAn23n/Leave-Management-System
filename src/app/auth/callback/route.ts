@@ -29,23 +29,31 @@ export async function GET(request: NextRequest) {
 
   if (!existing) {
     const admin = createAdminSupabaseClient();
-    const { data: pending } = await admin
-      .from("pending_user_roles")
-      .select("*")
-      .eq("email", authUser.email ?? "")
-      .maybeSingle();
+    const email = authUser.email ?? "";
+    const [{ data: pendingRole }, { data: pendingTeamLeads }] = await Promise.all([
+      admin.from("pending_user_roles").select("*").eq("email", email).maybeSingle(),
+      admin.from("pending_team_leads").select("*").eq("email", email),
+    ]);
 
-    if (pending) {
-      // An admin pre-provisioned this email's role/team ahead of time. Insert
-      // via the service-role client — users_insert_self's RLS WITH CHECK
-      // would otherwise cap a client-driven self-insert at role='user' (the
-      // anti-privilege-escalation rule), which can't fulfil a pre-set
+    if (pendingRole || (pendingTeamLeads && pendingTeamLeads.length > 0)) {
+      // An admin pre-provisioned this email's role/team(s) ahead of time.
+      // Leading at least one team makes them an approver regardless of any
+      // pre-set role, unless that role was explicitly 'admin'. Home team
+      // prefers the explicit pre-set one, else defaults to the first
+      // pre-assigned team so they're not stuck needing team selection.
+      const leadsTeams = pendingTeamLeads && pendingTeamLeads.length > 0;
+      const role = pendingRole?.role === "admin" ? "admin" : leadsTeams ? "approver" : (pendingRole?.role ?? "user");
+      const teamId = pendingRole?.team_id ?? (leadsTeams ? pendingTeamLeads![0].team_id : null);
+
+      // Insert via the service-role client — users_insert_self's RLS WITH
+      // CHECK would otherwise cap a client-driven self-insert at role='user'
+      // (the anti-privilege-escalation rule), which can't fulfil a pre-set
       // approver/admin role.
       const { error: insertError } = await admin.from("users").insert({
         id: authUser.id,
-        email: authUser.email ?? "",
-        role: pending.role,
-        team_id: pending.team_id,
+        email,
+        role,
+        team_id: teamId,
         is_active: true,
       });
 
@@ -54,19 +62,22 @@ export async function GET(request: NextRequest) {
         return NextResponse.redirect(`${origin}/login?error=profile_create_failed`);
       }
 
-      if (pending.role === "approver" && pending.team_id) {
-        const approvalOrder = pending.approval_order ?? (await nextApprovalOrder(admin, pending.team_id));
+      for (const lead of pendingTeamLeads ?? []) {
+        const approvalOrder = lead.approval_order ?? (await nextApprovalOrder(admin, lead.team_id));
         await admin
           .from("team_leads")
           .upsert(
-            { team_id: pending.team_id, user_id: authUser.id, approval_order: approvalOrder },
+            { team_id: lead.team_id, user_id: authUser.id, approval_order: approvalOrder },
             { onConflict: "team_id,user_id", ignoreDuplicates: true }
           );
       }
 
-      await admin.from("pending_user_roles").delete().eq("email", pending.email);
+      await Promise.all([
+        admin.from("pending_user_roles").delete().eq("email", email),
+        admin.from("pending_team_leads").delete().eq("email", email),
+      ]);
 
-      return NextResponse.redirect(pending.team_id ? `${origin}/` : `${origin}/onboarding/team`);
+      return NextResponse.redirect(teamId ? `${origin}/` : `${origin}/onboarding/team`);
     }
 
     // role/is_active set explicitly (not left to column defaults) so this

@@ -16,7 +16,7 @@ export default async function TeamsSettingsPage() {
     supabase.from("teams").select("*").order("created_at"),
     supabase.from("team_leads").select("*"),
     supabase.from("users").select("id, email, team_id").eq("is_active", true).order("email"),
-    supabase.from("pending_user_roles").select("*").order("created_at"),
+    supabase.from("pending_team_leads").select("*").order("created_at"),
   ]);
 
   const userMap = new Map((users ?? []).map((u) => [u.id, u.email]));
@@ -111,12 +111,12 @@ export default async function TeamsSettingsPage() {
                 ))}
 
                 {pending.map((p) => (
-                  <div key={p.email} className="flex items-center justify-between text-sm text-muted-foreground">
+                  <div key={p.id} className="flex items-center justify-between text-sm text-muted-foreground">
                     <span>
                       รอเข้าระบบครั้งแรก: {p.email} <Badge variant="outline">pending</Badge>
                     </span>
                     <form action={removePendingInvite}>
-                      <input type="hidden" name="email" value={p.email} />
+                      <input type="hidden" name="id" value={p.id} />
                       <Button type="submit" size="sm" variant="ghost">
                         ยกเลิก
                       </Button>

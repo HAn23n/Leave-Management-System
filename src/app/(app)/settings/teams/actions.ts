@@ -38,11 +38,12 @@ export async function setTeamActive(formData: FormData) {
 
 /**
  * Assigns a team lead by email — works whether that person already has an
- * account (any team, not just this one) or hasn't signed in yet. An
- * existing account is promoted/added to the chain immediately; an unknown
- * email is queued in pending_user_roles and consumed on their first Google
- * login (see src/app/auth/callback/route.ts), so the role/team/approval
- * order can be set up entirely in advance.
+ * account (any team, not just this one) or hasn't signed in yet, and for as
+ * many teams as needed either way. An existing account is promoted/added to
+ * the chain immediately; an unknown email is queued in pending_team_leads
+ * (one row per team) and consumed on their first Google login (see
+ * src/app/auth/callback/route.ts), so the whole chain can be set up in
+ * advance even before anyone involved has ever signed in.
  */
 export async function assignTeamLeadByEmail(formData: FormData) {
   await requireAdmin();
@@ -56,13 +57,15 @@ export async function assignTeamLeadByEmail(formData: FormData) {
   const { data: user } = await supabase.from("users").select("id, role, team_id").eq("email", email).maybeSingle();
 
   if (!user) {
-    // Not signed up yet — queue the assignment for their first login.
-    // approval_order left null: resolved against the real chain at consume
-    // time (nextApprovalOrder), so it stays correct even if other people
-    // join the chain in the meantime.
+    // Not signed up yet — queue this team's assignment for their first
+    // login. approval_order left null: resolved against the real chain at
+    // consume time (nextApprovalOrder), so it stays correct even if other
+    // people join the chain in the meantime. onConflict targets (email,
+    // team_id) — adding a 2nd, 3rd, ... team just adds another row, it
+    // never overwrites an earlier pending team.
     await supabase
-      .from("pending_user_roles")
-      .upsert({ email, role: "approver", team_id: teamId, approval_order: null }, { onConflict: "email" });
+      .from("pending_team_leads")
+      .upsert({ email, team_id: teamId, approval_order: null }, { onConflict: "email,team_id" });
     revalidatePath("/settings/teams");
     return;
   }
@@ -99,10 +102,10 @@ export async function assignTeamLeadByEmail(formData: FormData) {
 
 export async function removePendingInvite(formData: FormData) {
   await requireAdmin();
-  const email = String(formData.get("email"));
+  const id = String(formData.get("id"));
 
   const supabase = createServerSupabaseClient();
-  await supabase.from("pending_user_roles").delete().eq("email", email);
+  await supabase.from("pending_team_leads").delete().eq("id", id);
   revalidatePath("/settings/teams");
 }
 

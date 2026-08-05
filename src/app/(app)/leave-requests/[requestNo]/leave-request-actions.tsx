@@ -21,12 +21,14 @@ export function LeaveRequestActions({
   status,
   isOwner,
   isApproverInScope,
+  isCurrentApprover,
   currentUserRole,
 }: {
   requestId: string;
   status: LeaveStatus;
   isOwner: boolean;
   isApproverInScope: boolean;
+  isCurrentApprover: boolean;
   currentUserRole: UserRole;
 }) {
   const router = useRouter();
@@ -67,7 +69,9 @@ export function LeaveRequestActions({
   // their own leave, even an old draft/returned one from before they held the role.
   const canOwnerSubmit = isOwner && currentUserRole !== "approver" && (status === "draft" || status === "returned");
   const canOwnerCancel = isOwner && (status === "draft" || status === "pending");
-  const canApproverAct = isApproverInScope && !isOwner && status === "pending";
+  // Sequential approval chain: hide the buttons if it isn't this approver's
+  // turn yet (an earlier level hasn't signed off) — acting would just fail.
+  const canApproverAct = isApproverInScope && !isOwner && status === "pending" && isCurrentApprover;
   // The cancel API also allows approver/admin to cancel an already-approved
   // or returned request (see /api/leave-requests/[id]/cancel) — mirror both here.
   const canApproverCancel = isApproverInScope && (status === "approved" || status === "returned");

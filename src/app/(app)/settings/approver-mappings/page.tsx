@@ -10,10 +10,10 @@ export default async function ApproverMappingsSettingsPage() {
 
   const [{ data: mappings }, { data: users }] = await Promise.all([
     supabase.from("approver_mappings").select("*").order("created_at"),
-    supabase.from("users").select("id, full_name, role").eq("is_active", true).order("full_name"),
+    supabase.from("users").select("id, email, role").eq("is_active", true).order("email"),
   ]);
 
-  const userMap = new Map((users ?? []).map((u) => [u.id, u.full_name]));
+  const userMap = new Map((users ?? []).map((u) => [u.id, u.email]));
   const approverOptions = (users ?? []).filter((u) => u.role === "approver" || u.role === "admin");
 
   return (
@@ -33,7 +33,7 @@ export default async function ApproverMappingsSettingsPage() {
           <SelectContent>
             {(users ?? []).map((u) => (
               <SelectItem key={u.id} value={u.id}>
-                {u.full_name}
+                {u.email}
               </SelectItem>
             ))}
           </SelectContent>
@@ -45,7 +45,7 @@ export default async function ApproverMappingsSettingsPage() {
           <SelectContent>
             {approverOptions.map((u) => (
               <SelectItem key={u.id} value={u.id}>
-                {u.full_name}
+                {u.email}
               </SelectItem>
             ))}
           </SelectContent>

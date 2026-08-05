@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { LeaveRequestActions } from "./leave-request-actions";
 import { findLeaveRequestByParam } from "@/lib/leave-requests";
+import { resolveApprovalChain } from "@/lib/approval-chain";
 
 export default async function LeaveRequestDetailPage({ params }: { params: { requestNo: string } }) {
   const appUser = await requireAppUser();
@@ -20,9 +21,9 @@ export default async function LeaveRequestDetailPage({ params }: { params: { req
 
   const [{ data: leaveType }, { data: requester }, { data: approver }, { data: logs }] = await Promise.all([
     supabase.from("leave_types").select("name").eq("id", leaveRequest.leave_type_id).maybeSingle(),
-    supabase.from("users").select("full_name").eq("id", leaveRequest.user_id).maybeSingle(),
+    supabase.from("users").select("email").eq("id", leaveRequest.user_id).maybeSingle(),
     leaveRequest.approver_id
-      ? supabase.from("users").select("full_name").eq("id", leaveRequest.approver_id).maybeSingle()
+      ? supabase.from("users").select("email").eq("id", leaveRequest.approver_id).maybeSingle()
       : Promise.resolve({ data: null }),
     supabase
       .from("leave_request_logs")
@@ -34,12 +35,31 @@ export default async function LeaveRequestDetailPage({ params }: { params: { req
   const actorIds = Array.from(new Set((logs ?? []).map((l) => l.actor_id).filter(Boolean))) as string[];
   const { data: actors } =
     actorIds.length > 0
-      ? await supabase.from("users").select("id, full_name").in("id", actorIds)
-      : { data: [] as { id: string; full_name: string }[] };
-  const actorMap = new Map((actors ?? []).map((a) => [a.id, a.full_name]));
+      ? await supabase.from("users").select("id, email").in("id", actorIds)
+      : { data: [] as { id: string; email: string }[] };
+  const actorMap = new Map((actors ?? []).map((a) => [a.id, a.email]));
 
   const isOwner = leaveRequest.user_id === appUser.id;
   const isApproverInScope = appUser.role === "approver" || appUser.role === "admin";
+
+  // Sequential approval chain: only the approver assigned to the request's
+  // current level (or an override approver, or an admin) may act on it right
+  // now — other levels/teammates can see it (RLS is team-scoped, not
+  // level-scoped) but their approve/reject/return buttons must stay hidden.
+  const chain =
+    leaveRequest.status === "pending"
+      ? await resolveApprovalChain({ userId: leaveRequest.user_id, teamId: leaveRequest.team_id })
+      : null;
+  const pendingLevelApprover =
+    chain?.type === "chain" ? chain.levels.find((l) => l.level === leaveRequest.current_level)?.approver : null;
+  const isCurrentApprover =
+    appUser.role === "admin" ||
+    (chain
+      ? chain.type === "override"
+        ? chain.levels.some((l) => l.approver.id === appUser.id)
+        : chain.levels.some((l) => l.level === leaveRequest.current_level && l.approver.id === appUser.id)
+      : false);
+  const totalLevels = chain?.type === "chain" ? chain.levels.length : 1;
 
   return (
     <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-4 p-4 pb-28">
@@ -58,7 +78,7 @@ export default async function LeaveRequestDetailPage({ params }: { params: { req
           {leaveRequest.request_no && (
             <Row label="เลขที่เอกสาร" value={leaveRequest.request_no} />
           )}
-          <Row label="ผู้ขอลา" value={requester?.full_name ?? "-"} />
+          <Row label="ผู้ขอลา" value={requester?.email ?? "-"} />
           <Row
             label="วันที่เริ่ม"
             value={`${formatThaiDate(leaveRequest.start_date)} (${PERIOD_LABEL_TH[leaveRequest.start_period]})`}
@@ -69,7 +89,13 @@ export default async function LeaveRequestDetailPage({ params }: { params: { req
           />
           <Row label="จำนวนวันลา" value={leaveRequest.total_days != null ? `${leaveRequest.total_days} วัน` : "-"} />
           <Row label="เหตุผล" value={leaveRequest.reason || "-"} />
-          {approver && <Row label="ผู้อนุมัติ" value={approver.full_name} />}
+          {approver && <Row label="ผู้อนุมัติล่าสุด" value={approver.email} />}
+          {leaveRequest.status === "pending" && chain?.type === "chain" && totalLevels > 1 && (
+            <Row label="ลำดับอนุมัติ" value={`${leaveRequest.current_level} / ${totalLevels}`} />
+          )}
+          {leaveRequest.status === "pending" && pendingLevelApprover && (
+            <Row label="รอการอนุมัติจาก" value={pendingLevelApprover.email} />
+          )}
           {leaveRequest.approver_note && <Row label="หมายเหตุ" value={leaveRequest.approver_note} />}
         </CardContent>
       </Card>
@@ -109,6 +135,7 @@ export default async function LeaveRequestDetailPage({ params }: { params: { req
         status={leaveRequest.status}
         isOwner={isOwner}
         isApproverInScope={isApproverInScope}
+        isCurrentApprover={isCurrentApprover}
         currentUserRole={appUser.role}
       />
     </main>

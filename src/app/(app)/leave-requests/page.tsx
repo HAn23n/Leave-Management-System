@@ -59,12 +59,12 @@ export default async function LeaveRequestsSearchPage({
     supabase.from("leave_types").select("id, name, color"),
     appUser.role === "user"
       ? Promise.resolve({ data: null })
-      : supabase.from("users").select("id, full_name"),
+      : supabase.from("users").select("id, email"),
     supabase.from("holidays").select("holiday_date, name"),
   ]);
 
   const leaveTypeMap = new Map((leaveTypes ?? []).map((lt) => [lt.id, lt]));
-  const userMap = new Map((users ?? []).map((u) => [u.id, u.full_name]));
+  const userMap = new Map((users ?? []).map((u) => [u.id, u.email]));
   const holidayMap = new Map((holidayRows ?? []).map((h) => [h.holiday_date, h.name]));
 
   return (

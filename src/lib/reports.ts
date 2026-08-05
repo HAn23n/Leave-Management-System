@@ -45,7 +45,7 @@ export async function loadReportLookups(
   const teamIds = Array.from(new Set(requests.map((r) => r.team_id)));
 
   const [{ data: users }, { data: leaveTypes }, { data: teams }] = await Promise.all([
-    userIds.length ? supabase.from("users").select("id, full_name").in("id", userIds) : Promise.resolve({ data: [] }),
+    userIds.length ? supabase.from("users").select("id, email").in("id", userIds) : Promise.resolve({ data: [] }),
     leaveTypeIds.length
       ? supabase.from("leave_types").select("id, name").in("id", leaveTypeIds)
       : Promise.resolve({ data: [] }),
@@ -53,7 +53,7 @@ export async function loadReportLookups(
   ]);
 
   return {
-    userMap: new Map((users ?? []).map((u) => [u.id, u.full_name])),
+    userMap: new Map((users ?? []).map((u) => [u.id, u.email])),
     leaveTypeMap: new Map((leaveTypes ?? []).map((lt) => [lt.id, lt.name])),
     teamMap: new Map((teams ?? []).map((t) => [t.id, t.name])),
   };

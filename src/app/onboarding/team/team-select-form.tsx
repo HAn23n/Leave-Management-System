@@ -4,8 +4,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
 interface TeamOption {
@@ -13,17 +11,15 @@ interface TeamOption {
   name: string;
 }
 
-export function TeamSelectForm({ teams, currentFullName }: { teams: TeamOption[]; currentFullName: string }) {
+export function TeamSelectForm({ teams }: { teams: TeamOption[] }) {
   const router = useRouter();
-  const [fullName, setFullName] = useState(currentFullName);
   const [selected, setSelected] = useState<string | null>(teams[0]?.id ?? null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleConfirm() {
-    const trimmedName = fullName.trim();
-    if (!selected || !trimmedName) {
-      setError("กรุณากรอกชื่อและเลือกทีม");
+    if (!selected) {
+      setError("กรุณาเลือกทีม");
       return;
     }
     setLoading(true);
@@ -38,10 +34,7 @@ export function TeamSelectForm({ teams, currentFullName }: { teams: TeamOption[]
       return;
     }
 
-    const { error: updateError } = await supabase
-      .from("users")
-      .update({ team_id: selected, full_name: trimmedName })
-      .eq("id", user.id);
+    const { error: updateError } = await supabase.from("users").update({ team_id: selected }).eq("id", user.id);
 
     if (updateError) {
       setError("บันทึกข้อมูลไม่สำเร็จ กรุณาลองใหม่อีกครั้ง");
@@ -55,16 +48,6 @@ export function TeamSelectForm({ teams, currentFullName }: { teams: TeamOption[]
 
   return (
     <div className="flex w-full max-w-xs flex-col gap-3">
-      <div className="space-y-2 text-left">
-        <Label htmlFor="full_name">ชื่อ-นามสกุล</Label>
-        <Input
-          id="full_name"
-          value={fullName}
-          onChange={(e) => setFullName(e.target.value)}
-          placeholder="ชื่อ-นามสกุล"
-        />
-      </div>
-
       {teams.length === 0 && (
         <p className="text-center text-sm text-muted-foreground">ยังไม่มีทีมในระบบ กรุณาติดต่อผู้ดูแลระบบ</p>
       )}
@@ -87,7 +70,7 @@ export function TeamSelectForm({ teams, currentFullName }: { teams: TeamOption[]
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
-      <Button onClick={handleConfirm} disabled={!selected || !fullName.trim() || loading} size="lg" className="mt-2">
+      <Button onClick={handleConfirm} disabled={!selected || loading} size="lg" className="mt-2">
         {loading ? "กำลังบันทึก..." : "ยืนยัน"}
       </Button>
     </div>

@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
 
   sheet.columns = [
     { header: "เลขที่เอกสาร", key: "request_no", width: 16 },
-    { header: "ชื่อพนักงาน", key: "employee", width: 22 },
+    { header: "อีเมลพนักงาน", key: "employee", width: 26 },
     { header: "ทีม", key: "team", width: 14 },
     { header: "ประเภทการลา", key: "leave_type", width: 16 },
     { header: "วันที่เริ่ม", key: "start_date", width: 14 },

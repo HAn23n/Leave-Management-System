@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { nextApprovalOrder } from "@/lib/approval-chain";
 import type { UserRole } from "@/lib/supabase/types";
 
 const VALID_ROLES: UserRole[] = ["admin", "approver", "user"];
@@ -21,10 +22,11 @@ export async function updateUserRole(formData: FormData) {
   // role, regardless of which settings screen the admin used.
   if (user) {
     if (role === "approver" && user.team_id) {
+      const nextOrder = await nextApprovalOrder(supabase, user.team_id);
       await supabase
         .from("team_leads")
         .upsert(
-          { team_id: user.team_id, user_id: id },
+          { team_id: user.team_id, user_id: id, approval_order: nextOrder },
           { onConflict: "team_id,user_id", ignoreDuplicates: true }
         );
     } else if (role !== "approver" && user.role === "approver") {
@@ -62,9 +64,13 @@ export async function updateUserTeam(formData: FormData) {
     // An approver moved to a new team keeps leading (just the new team) —
     // re-add the team_leads row so approval-notification routing follows them.
     if (teamId && user?.role === "approver") {
+      const nextOrder = await nextApprovalOrder(supabase, teamId);
       await supabase
         .from("team_leads")
-        .upsert({ team_id: teamId, user_id: id }, { onConflict: "team_id,user_id", ignoreDuplicates: true });
+        .upsert(
+          { team_id: teamId, user_id: id, approval_order: nextOrder },
+          { onConflict: "team_id,user_id", ignoreDuplicates: true }
+        );
     }
   }
 

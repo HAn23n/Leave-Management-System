@@ -29,10 +29,10 @@ async function loadPendingTeamRequests(supabase: SupabaseClient<Database>) {
     const userIds = Array.from(new Set(pendingTeamRequests.map((r) => r.user_id)));
     const leaveTypeIds = Array.from(new Set(pendingTeamRequests.map((r) => r.leave_type_id)));
     const [{ data: users }, { data: pendingLeaveTypes }] = await Promise.all([
-      supabase.from("users").select("id, full_name").in("id", userIds),
+      supabase.from("users").select("id, email").in("id", userIds),
       supabase.from("leave_types").select("id, name").in("id", leaveTypeIds),
     ]);
-    requesterMap = new Map((users ?? []).map((u) => [u.id, u.full_name]));
+    requesterMap = new Map((users ?? []).map((u) => [u.id, u.email]));
     leaveTypeMap = new Map((pendingLeaveTypes ?? []).map((lt) => [lt.id, lt.name]));
   }
 
@@ -51,7 +51,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
     return (
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 p-4 pb-24">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-foreground">สวัสดี, {appUser.full_name}</h1>
+          <h1 className="text-xl font-bold tracking-tight text-foreground">สวัสดี, {appUser.email}</h1>
           <p className="text-sm text-muted-foreground">คำขอรออนุมัติของทีม</p>
         </div>
 
@@ -133,7 +133,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 p-4 pb-24">
       <div>
-        <h1 className="text-xl font-bold tracking-tight text-foreground">สวัสดี, {appUser.full_name}</h1>
+        <h1 className="text-xl font-bold tracking-tight text-foreground">สวัสดี, {appUser.email}</h1>
         <p className="text-sm text-muted-foreground">สรุปคำขอลาของฉัน</p>
       </div>
 

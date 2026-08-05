@@ -5,14 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { updateUserRole, updateUserTeam, setUserActive } from "./actions";
 
-const ROLE_LABEL = { admin: "ผู้ดูแลระบบ", approver: "หัวหน้าทีม", user: "พนักงาน" } as const;
+const ROLE_LABEL = { admin: "ผู้ดูแลระบบ", approver: "หัวหน้าทีม", user: "developer" } as const;
 
 export default async function UsersSettingsPage() {
   await requireAdmin();
   const supabase = createServerSupabaseClient();
 
   const [{ data: users }, { data: teams }] = await Promise.all([
-    supabase.from("users").select("*").order("full_name"),
+    supabase.from("users").select("*").order("email"),
     supabase.from("teams").select("id, name").eq("is_active", true).order("name"),
   ]);
 
@@ -27,8 +27,7 @@ export default async function UsersSettingsPage() {
           <div key={u.id} className="rounded-lg border border-border bg-white p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium text-foreground">{u.full_name}</p>
-                <p className="text-xs text-muted-foreground">{u.email}</p>
+                <p className="font-medium text-foreground">{u.email}</p>
               </div>
               <Badge variant={u.is_active ? "success" : "secondary"}>
                 {u.is_active ? "ใช้งาน" : "ปิดใช้งาน"}

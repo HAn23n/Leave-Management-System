@@ -85,8 +85,7 @@ function ctaButton(href: string, label: string): string {
 
 export async function notifyNewLeaveRequest(params: {
   approverEmail: string;
-  approverName: string;
-  requesterName: string;
+  requesterEmail: string;
   requestNo: string | null;
   leaveTypeName: string;
   startDate: string;
@@ -98,11 +97,11 @@ export async function notifyNewLeaveRequest(params: {
   if (!transporter) return;
 
   const body = `
-    <p>เรียนคุณ ${escapeHtml(params.approverName)}</p>
+    <p>เรียนคุณ ${escapeHtml(params.approverEmail)}</p>
     <p>มีคำขอลาใหม่รอการอนุมัติจากคุณ</p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px;">
       ${params.requestNo ? infoRow("เลขที่เอกสาร", escapeHtml(params.requestNo)) : ""}
-      ${infoRow("ผู้ขอลา", escapeHtml(params.requesterName))}
+      ${infoRow("ผู้ขอลา", escapeHtml(params.requesterEmail))}
       ${infoRow("ประเภทการลา", escapeHtml(params.leaveTypeName))}
       ${infoRow("วันที่", `${formatThaiDate(params.startDate)} - ${formatThaiDate(params.endDate)}`)}
       ${params.totalDays != null ? infoRow("จำนวนวัน", `${params.totalDays} วัน`) : ""}
@@ -113,7 +112,7 @@ export async function notifyNewLeaveRequest(params: {
   await transporter.sendMail({
     from: FROM,
     to: params.approverEmail,
-    subject: `[รออนุมัติ] คำขอลาจาก ${params.requesterName}`,
+    subject: `[รออนุมัติ] คำขอลาจาก ${params.requesterEmail}`,
     html: emailShell("มีคำขอลาใหม่รออนุมัติ", body),
   });
 }
@@ -126,13 +125,12 @@ const DECISION_LABEL: Record<"approved" | "rejected" | "returned", string> = {
 
 export async function notifyLeaveDecision(params: {
   requesterEmail: string;
-  requesterName: string;
   requestNo: string | null;
   leaveTypeName: string;
   startDate: string;
   endDate: string;
   decision: "approved" | "rejected" | "returned";
-  approverName: string;
+  approverEmail: string;
   approverNote?: string | null;
   requestUrl: string;
 }): Promise<void> {
@@ -141,13 +139,13 @@ export async function notifyLeaveDecision(params: {
 
   const decisionLabel = DECISION_LABEL[params.decision];
   const body = `
-    <p>เรียนคุณ ${escapeHtml(params.requesterName)}</p>
+    <p>เรียนคุณ ${escapeHtml(params.requesterEmail)}</p>
     <p>คำขอลาของคุณได้รับการพิจารณาแล้ว ผลคือ <strong>${decisionLabel}</strong></p>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px;">
       ${params.requestNo ? infoRow("เลขที่เอกสาร", escapeHtml(params.requestNo)) : ""}
       ${infoRow("ประเภทการลา", escapeHtml(params.leaveTypeName))}
       ${infoRow("วันที่", `${formatThaiDate(params.startDate)} - ${formatThaiDate(params.endDate)}`)}
-      ${infoRow("พิจารณาโดย", escapeHtml(params.approverName))}
+      ${infoRow("พิจารณาโดย", escapeHtml(params.approverEmail))}
       ${params.approverNote ? infoRow("หมายเหตุ", escapeHtml(params.approverNote)) : ""}
     </table>
     ${ctaButton(params.requestUrl, "ดูรายละเอียด")}

@@ -20,7 +20,7 @@ export default async function ProfilePage() {
 
   const hasPendingOrApproved = (pendingOrApprovedCount ?? 0) > 0;
 
-  const roleLabel = { admin: "ผู้ดูแลระบบ", approver: "หัวหน้าทีม", user: "พนักงาน" }[appUser.role];
+  const roleLabel = { admin: "ผู้ดูแลระบบ", approver: "หัวหน้าทีม", user: "developer" }[appUser.role];
 
   return (
     <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-4 p-4 pb-24">
@@ -29,10 +29,6 @@ export default async function ProfilePage() {
           <CardTitle>โปรไฟล์</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-2 text-sm">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">ชื่อ</span>
-            <span className="font-medium">{appUser.full_name}</span>
-          </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">อีเมล</span>
             <span className="font-medium">{appUser.email}</span>

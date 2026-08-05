@@ -34,6 +34,8 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
     // place would show a stale approver/note on what is now a pending request.
     approverId: null,
     approverNote: null,
+    // Every (re)submission restarts the approval chain from level 1.
+    currentLevel: 1,
   });
 
   if (!result.ok) {
@@ -58,8 +60,7 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
       approvers.map((approver) =>
         notifyNewLeaveRequest({
           approverEmail: approver.email,
-          approverName: approver.full_name,
-          requesterName: appUser.full_name,
+          requesterEmail: appUser.email,
           requestNo: requestRow.request_no,
           leaveTypeName: leaveType?.name ?? "",
           startDate: requestRow.start_date,

@@ -25,7 +25,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Repo
   const [{ data: leaveTypes }, { data: teams }, { data: teamUsers }, { data: holidayRows }] = await Promise.all([
     supabase.from("leave_types").select("id, name"),
     appUser.role === "admin" ? supabase.from("teams").select("id, name") : Promise.resolve({ data: null }),
-    isApprover ? supabase.from("users").select("id, full_name") : Promise.resolve({ data: null }),
+    isApprover ? supabase.from("users").select("id, email") : Promise.resolve({ data: null }),
     supabase.from("holidays").select("holiday_date, name"),
   ]);
   const holidayMap = new Map((holidayRows ?? []).map((h) => [h.holiday_date, h.name]));
@@ -54,7 +54,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Repo
                 <SelectItem value="all">ทุกคน</SelectItem>
                 {(teamUsers ?? []).map((u) => (
                   <SelectItem key={u.id} value={u.id}>
-                    {u.full_name}
+                    {u.email}
                   </SelectItem>
                 ))}
               </SelectContent>

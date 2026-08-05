@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentAppUser } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { transitionLeaveRequest } from "@/lib/leave-requests";
-import { resolveApprovers } from "@/lib/approval-chain";
+import { resolveApprovers, firstApprovalLevel } from "@/lib/approval-chain";
 import { notifyNewLeaveRequest } from "@/lib/email";
 import { rateLimitResponse } from "@/lib/rate-limit";
 
@@ -24,6 +24,16 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
 
   const supabase = createServerSupabaseClient();
 
+  const { data: existing } = await supabase
+    .from("leave_requests")
+    .select("user_id, team_id")
+    .eq("id", params.id)
+    .maybeSingle();
+  if (!existing) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+  const startLevel = await firstApprovalLevel({ userId: existing.user_id, teamId: existing.team_id });
+
   const result = await transitionLeaveRequest({
     supabase,
     id: params.id,
@@ -34,8 +44,10 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
     // place would show a stale approver/note on what is now a pending request.
     approverId: null,
     approverNote: null,
-    // Every (re)submission restarts the approval chain from level 1.
-    currentLevel: 1,
+    // Every (re)submission restarts the approval chain at its lowest level
+    // (not hardcoded 1 — the team's chain may not start at 1 if an earlier
+    // level was ever removed).
+    currentLevel: startLevel,
   });
 
   if (!result.ok) {

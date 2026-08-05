@@ -139,7 +139,12 @@ export interface Database {
       leave_request_logs: Table<LeaveRequestLog>;
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      move_team_lead: {
+        Args: { p_id: string; p_direction: string };
+        Returns: void;
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireAdmin } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { nextApprovalOrder } from "@/lib/approval-chain";
+import { addTeamLead } from "@/lib/approval-chain";
 import type { Database, UserRole } from "@/lib/supabase/types";
 
 const VALID_ROLES: UserRole[] = ["admin", "approver", "user"];
@@ -16,24 +16,16 @@ export async function updateUserRole(formData: FormData) {
   if (!VALID_ROLES.includes(role as UserRole)) return;
 
   const supabase = createServerSupabaseClient();
-  const { data: user } = await supabase.from("users").select("role, team_id").eq("id", id).maybeSingle();
+  const { data: user } = await supabase.from("users").select("role").eq("id", id).maybeSingle();
   await supabase.from("users").update({ role: role as UserRole }).eq("id", id);
 
-  // Keep team_leads (used for approval-notification routing) in sync with
-  // role, regardless of which settings screen the admin used.
-  if (user) {
-    if (role === "approver" && user.team_id) {
-      const nextOrder = await nextApprovalOrder(supabase, user.team_id);
-      await supabase
-        .from("team_leads")
-        .upsert(
-          { team_id: user.team_id, user_id: id, approval_order: nextOrder },
-          { onConflict: "team_id,user_id", ignoreDuplicates: true }
-        );
-    } else if (role !== "approver" && user.role === "approver") {
-      // No longer an approver at all — drop every team they led, not just one.
-      await supabase.from("team_leads").delete().eq("user_id", id);
-    }
+  // Demoting away from approver leaves any team_leads rows contradicting
+  // the new role (trg_team_leads_sync_role reacts to team_leads changes,
+  // not to a direct role edit, so this direction still needs handling
+  // here). Promoting *to* approver deliberately does NOT auto-add them to
+  // any team — use the "ทีมที่ดูแลอนุมัติ" checkboxes below for that.
+  if (user?.role === "approver" && role !== "approver") {
+    await supabase.from("team_leads").delete().eq("user_id", id);
   }
 
   revalidatePath("/settings/users");
@@ -72,24 +64,11 @@ async function syncApprovedTeams(supabase: SupabaseClient<Database>, userId: str
       );
   }
 
+  // Role follows automatically from team_leads membership either direction
+  // — see trg_team_leads_sync_role (migration 0018).
   for (const teamId of teamIds) {
     if (currentTeamIds.has(teamId)) continue;
-    const nextOrder = await nextApprovalOrder(supabase, teamId);
-    await supabase
-      .from("team_leads")
-      .upsert(
-        { team_id: teamId, user_id: userId, approval_order: nextOrder },
-        { onConflict: "team_id,user_id", ignoreDuplicates: true }
-      );
-  }
-
-  // Keep role in sync: leading at least one team makes them an approver;
-  // leading none demotes back to plain user. Never touch admin.
-  const { data: user } = await supabase.from("users").select("role").eq("id", userId).maybeSingle();
-  if (user?.role === "user" && nextTeamIds.size > 0) {
-    await supabase.from("users").update({ role: "approver" }).eq("id", userId);
-  } else if (user?.role === "approver" && nextTeamIds.size === 0) {
-    await supabase.from("users").update({ role: "user" }).eq("id", userId);
+    await addTeamLead(supabase, teamId, userId);
   }
 }
 

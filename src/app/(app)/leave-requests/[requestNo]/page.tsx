@@ -50,15 +50,17 @@ export default async function LeaveRequestDetailPage({ params }: { params: { req
     leaveRequest.status === "pending"
       ? await resolveApprovalChain({ userId: leaveRequest.user_id, teamId: leaveRequest.team_id })
       : null;
-  const pendingLevelApprover =
-    chain?.type === "chain" ? chain.levels.find((l) => l.level === leaveRequest.current_level)?.approver : null;
+  // `level` is team_leads.approval_order's stored value, not a sequential
+  // position — findIndex gives the human-readable "X of Y" position for
+  // display, separately from the stable value used for matching below.
+  const currentLevelIndex =
+    chain?.type === "chain" ? chain.levels.findIndex((l) => l.level === leaveRequest.current_level) : -1;
+  const pendingLevelApprover = currentLevelIndex >= 0 ? chain!.levels[currentLevelIndex].approver : null;
   const isCurrentApprover =
     appUser.role === "admin" ||
-    (chain
-      ? chain.type === "override"
-        ? chain.levels.some((l) => l.approver.id === appUser.id)
-        : chain.levels.some((l) => l.level === leaveRequest.current_level && l.approver.id === appUser.id)
-      : false);
+    (chain?.type === "override"
+      ? chain.levels.some((l) => l.approver.id === appUser.id)
+      : pendingLevelApprover?.id === appUser.id);
   const totalLevels = chain?.type === "chain" ? chain.levels.length : 1;
 
   return (
@@ -90,8 +92,8 @@ export default async function LeaveRequestDetailPage({ params }: { params: { req
           <Row label="จำนวนวันลา" value={leaveRequest.total_days != null ? `${leaveRequest.total_days} วัน` : "-"} />
           <Row label="เหตุผล" value={leaveRequest.reason || "-"} />
           {approver && <Row label="ผู้อนุมัติล่าสุด" value={approver.email} />}
-          {leaveRequest.status === "pending" && chain?.type === "chain" && totalLevels > 1 && (
-            <Row label="ลำดับอนุมัติ" value={`${leaveRequest.current_level} / ${totalLevels}`} />
+          {leaveRequest.status === "pending" && chain?.type === "chain" && totalLevels > 1 && currentLevelIndex >= 0 && (
+            <Row label="ลำดับอนุมัติ" value={`${currentLevelIndex + 1} / ${totalLevels}`} />
           )}
           {leaveRequest.status === "pending" && pendingLevelApprover && (
             <Row label="รอการอนุมัติจาก" value={pendingLevelApprover.email} />

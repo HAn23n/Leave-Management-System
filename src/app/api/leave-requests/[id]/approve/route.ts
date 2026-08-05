@@ -27,7 +27,14 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
   });
 
   if (!result.ok) {
-    const status = result.reason === "not_found" ? 404 : result.reason === "db_error" ? 400 : 409;
+    const status =
+      result.reason === "not_found"
+        ? 404
+        : result.reason === "forbidden"
+          ? 403
+          : result.reason === "db_error"
+            ? 400
+            : 409;
     return NextResponse.json({ error: result.reason, message: result.message }, { status });
   }
 

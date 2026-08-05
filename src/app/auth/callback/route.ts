@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
-import { nextApprovalOrder } from "@/lib/approval-chain";
+import { addTeamLead } from "@/lib/approval-chain";
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
     const email = authUser.email ?? "";
     const [{ data: pendingRole }, { data: pendingTeamLeads }] = await Promise.all([
       admin.from("pending_user_roles").select("*").eq("email", email).maybeSingle(),
-      admin.from("pending_team_leads").select("*").eq("email", email),
+      admin.from("pending_team_leads").select("*").eq("email", email).order("created_at"),
     ]);
 
     if (pendingRole || (pendingTeamLeads && pendingTeamLeads.length > 0)) {
@@ -63,13 +63,7 @@ export async function GET(request: NextRequest) {
       }
 
       for (const lead of pendingTeamLeads ?? []) {
-        const approvalOrder = lead.approval_order ?? (await nextApprovalOrder(admin, lead.team_id));
-        await admin
-          .from("team_leads")
-          .upsert(
-            { team_id: lead.team_id, user_id: authUser.id, approval_order: approvalOrder },
-            { onConflict: "team_id,user_id", ignoreDuplicates: true }
-          );
+        await addTeamLead(admin, lead.team_id, authUser.id, lead.approval_order ?? undefined);
       }
 
       await Promise.all([

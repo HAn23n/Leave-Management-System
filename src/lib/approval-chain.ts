@@ -25,6 +25,14 @@ export interface ApprovalChain {
  * Resolves the full approval chain for a leave request. approver_mappings is
  * an override for special cases; team_leads (ordered by approval_order) is
  * the normal path, e.g. หัวหน้าคนที่ 1 (level 1) -> หัวหน้าคนที่ 2 (level 2).
+ *
+ * `level` IS the stored approval_order value (not a recomputed array
+ * position) — leave_requests.current_level is a snapshot compared against
+ * this on every action, and a position-based level would silently retarget
+ * an in-flight request to a different person whenever a lead is
+ * added/removed/reordered while it's pending. approval_order values don't
+ * need to stay gap-free for this to work (see nextLevel logic in
+ * lib/leave-requests.ts, which jumps to the next *present* value, not +1).
  */
 export async function resolveApprovalChain(params: { userId: string; teamId: string }): Promise<ApprovalChain> {
   const admin = createAdminSupabaseClient();
@@ -64,40 +72,71 @@ export async function resolveApprovalChain(params: { userId: string; teamId: str
     .eq("is_active", true);
   const userMap = new Map((users ?? []).map((u) => [u.id, u]));
 
-  // `level` is the 1-based position in the sorted list, not the raw stored
-  // approval_order value — approval_order only needs to sort correctly, it
-  // doesn't need to stay gap-free as leads are added/removed/reordered.
   const levels: ApprovalLevel[] = [];
   for (const lead of leads) {
     const approver = userMap.get(lead.user_id);
-    if (approver) levels.push({ level: levels.length + 1, approver });
+    if (approver) levels.push({ level: lead.approval_order, approver });
   }
   return { type: "chain", levels };
 }
 
-/**
- * Next free approval_order for a new lead in this team — appends them to the
- * end of the chain (last level). Used wherever a team_leads row gets
- * upserted with a default: inserting with the column's default (1) would
- * collide with the unique (team_id, approval_order) constraint whenever the
- * team already has a level-1 lead.
- */
-export async function nextApprovalOrder(supabase: SupabaseClient<Database>, teamId: string): Promise<number> {
-  const { data } = await supabase
-    .from("team_leads")
-    .select("approval_order")
-    .eq("team_id", teamId)
-    .order("approval_order", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  return (data?.approval_order ?? 0) + 1;
-}
-
-/** Who to notify about a brand-new submission — level 1 of the chain (or every override approver). */
+/** Who to notify about a brand-new submission — the chain's first (lowest) level, or every override approver. */
 export async function resolveApprovers(params: { userId: string; teamId: string }): Promise<ApproverContact[]> {
   const chain = await resolveApprovalChain(params);
   if (chain.type === "override") return chain.levels.map((l) => l.approver);
   const firstLevel = chain.levels[0]?.level;
   if (firstLevel == null) return [];
   return chain.levels.filter((l) => l.level === firstLevel).map((l) => l.approver);
+}
+
+/** The level a freshly submitted (or resubmitted) request should start at — the chain's lowest level, or 1 if there's no chain yet. */
+export async function firstApprovalLevel(params: { userId: string; teamId: string }): Promise<number> {
+  const chain = await resolveApprovalChain(params);
+  return chain.type === "chain" ? (chain.levels[0]?.level ?? 1) : 1;
+}
+
+const UNIQUE_VIOLATION = "23505";
+
+/**
+ * Adds a team_leads row, appending to the end of the chain when no explicit
+ * approval_order is given. The "read current max, then insert max+1" step
+ * isn't atomic, so two concurrent callers assigning a lead to the same team
+ * can compute the same order and collide on the (team_id, approval_order)
+ * unique constraint — retries with a freshly recomputed order instead of
+ * leaving that error unhandled (which previously left the second caller's
+ * assignment silently dropped).
+ */
+export async function addTeamLead(
+  supabase: SupabaseClient<Database>,
+  teamId: string,
+  userId: string,
+  approvalOrder?: number
+): Promise<void> {
+  if (approvalOrder != null) {
+    const { error } = await supabase
+      .from("team_leads")
+      .upsert({ team_id: teamId, user_id: userId, approval_order: approvalOrder }, { onConflict: "team_id,user_id", ignoreDuplicates: true });
+    if (error) throw error;
+    return;
+  }
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { data } = await supabase
+      .from("team_leads")
+      .select("approval_order")
+      .eq("team_id", teamId)
+      .order("approval_order", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const nextOrder = (data?.approval_order ?? 0) + 1;
+
+    const { error } = await supabase
+      .from("team_leads")
+      .upsert({ team_id: teamId, user_id: userId, approval_order: nextOrder }, { onConflict: "team_id,user_id", ignoreDuplicates: true });
+
+    if (!error) return;
+    if (error.code !== UNIQUE_VIOLATION) throw error;
+    // Someone else claimed that order first — recompute and retry.
+  }
+  throw new Error("ไม่สามารถกำหนดลำดับผู้อนุมัติได้ กรุณาลองใหม่อีกครั้ง");
 }

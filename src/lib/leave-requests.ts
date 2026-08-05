@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AppUser, Database, LeaveRequest, LeaveStatus } from "@/lib/supabase/types";
 import { notifyLeaveDecision, notifyNewLeaveRequest } from "@/lib/email";
 import { resolveApprovalChain } from "@/lib/approval-chain";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { safeDbErrorMessage } from "@/lib/db-error";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -31,16 +32,16 @@ interface TransitionParams {
   toStatus: LeaveStatus;
   approverId?: string | null;
   approverNote?: string | null;
-  /** Explicit current_level to set — used to reset the chain to level 1 on 'returned'. */
+  /** Explicit current_level to set — used to reset the chain to its lowest level on 'returned'. */
   currentLevel?: number;
 }
 
 interface TransitionResult {
   ok: boolean;
   request?: LeaveRequest;
-  /** "not_found" = no row with that id/scope, "conflict" = optimistic-lock mismatch (status already moved), "db_error" = a trigger/constraint rejected the write (e.g. overlap) */
-  reason?: "not_found" | "conflict" | "db_error";
-  /** Set on "db_error" — the actual Postgres/trigger message (already Thai), safe to show the user directly. */
+  /** "not_found" = no row with that id/scope, "conflict" = optimistic-lock mismatch (status already moved), "db_error" = a trigger/constraint rejected the write (e.g. overlap), "forbidden" = caller isn't authorized to act on this request right now */
+  reason?: "not_found" | "conflict" | "db_error" | "forbidden";
+  /** Set on "db_error"/"forbidden" — a message safe to show the user directly. */
   message?: string;
 }
 
@@ -124,33 +125,32 @@ export async function decideOnPendingRequest({
   if (current.status !== "pending") return { ok: false, reason: "conflict" };
 
   const chain = await resolveApprovalChain({ userId: current.user_id, teamId: current.team_id });
+  // `level` is team_leads.approval_order's actual stored value (see
+  // resolveApprovalChain), so this equality check stays correct even if
+  // other levels are added/removed/reordered elsewhere — it's never
+  // re-derived from array position.
+  const isAssignedAtCurrentLevel =
+    chain.type === "chain" && chain.levels.some((l) => l.level === current.current_level && l.approver.id === actor.id);
   const isAuthorized =
     actor.role === "admin" ||
-    (chain.type === "override"
-      ? chain.levels.some((l) => l.approver.id === actor.id)
-      : chain.levels.some((l) => l.level === current.current_level && l.approver.id === actor.id));
+    (chain.type === "override" ? chain.levels.some((l) => l.approver.id === actor.id) : isAssignedAtCurrentLevel);
 
   if (!isAuthorized) {
-    return { ok: false, reason: "db_error", message: "ยังไม่ถึงลำดับอนุมัติของคุณ" };
+    return { ok: false, reason: "forbidden", message: "ยังไม่ถึงลำดับอนุมัติของคุณ" };
   }
 
-  const maxLevel = chain.type === "override" ? 1 : chain.levels.length;
   // An admin who happens to also be the chain's assigned approver at the
   // current level (e.g. explicitly set as ลำดับ 1) still hands off to the
   // next level like anyone else — admin's instant-finalize power is for
   // acting outside/out-of-turn on the chain, not for skipping levels they
   // were deliberately placed in.
-  const actingAtOwnChainTurn =
-    chain.type === "chain" && chain.levels.some((l) => l.level === current.current_level && l.approver.id === actor.id);
-  const isLastLevel =
-    chain.type === "override" ||
-    (actor.role === "admin" && !actingAtOwnChainTurn) ||
-    current.current_level >= maxLevel;
+  const nextLevel = chain.type === "chain" ? chain.levels.find((l) => l.level > current.current_level) : undefined;
+  const isLastLevel = chain.type === "override" || (actor.role === "admin" && !isAssignedAtCurrentLevel) || !nextLevel;
 
-  if (decision === "approved" && !isLastLevel) {
+  if (decision === "approved" && !isLastLevel && nextLevel) {
     const { data, error } = await supabase
       .from("leave_requests")
-      .update({ current_level: current.current_level + 1, approver_id: actor.id, approver_note: note })
+      .update({ current_level: nextLevel.level, approver_id: actor.id, approver_note: note })
       .eq("id", id)
       .eq("status", "pending")
       .eq("current_level", current.current_level)
@@ -160,9 +160,12 @@ export async function decideOnPendingRequest({
     if (error) return { ok: false, reason: "db_error", message: safeDbErrorMessage(error) };
     if (!data) return { ok: false, reason: "conflict" };
 
-    // The status-change trigger only logs when `status` itself changes — this
-    // step keeps it 'pending', so log the level advance manually.
-    await supabase.from("leave_request_logs").insert({
+    // The status-change trigger only logs when `status` itself changes, and
+    // (unlike the trigger, which is SECURITY DEFINER) the caller's own
+    // session has no RLS policy allowing an insert into leave_request_logs
+    // — route this one through the admin client instead.
+    const admin = createAdminSupabaseClient();
+    await admin.from("leave_request_logs").insert({
       request_id: id,
       actor_id: actor.id,
       from_status: "pending",
@@ -171,24 +174,21 @@ export async function decideOnPendingRequest({
     });
 
     try {
-      const nextLevel = chain.levels.find((l) => l.level === current.current_level + 1);
-      if (nextLevel) {
-        const [{ data: requester }, { data: leaveType }] = await Promise.all([
-          supabase.from("users").select("email").eq("id", current.user_id).single(),
-          supabase.from("leave_types").select("name").eq("id", current.leave_type_id).single(),
-        ]);
-        if (requester) {
-          await notifyNewLeaveRequest({
-            approverEmail: nextLevel.approver.email,
-            requesterEmail: requester.email,
-            requestNo: current.request_no,
-            leaveTypeName: leaveType?.name ?? "",
-            startDate: current.start_date,
-            endDate: current.end_date,
-            totalDays: current.total_days,
-            requestUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/leave-requests/${current.request_no}`,
-          });
-        }
+      const [{ data: requester }, { data: leaveType }] = await Promise.all([
+        supabase.from("users").select("email").eq("id", current.user_id).single(),
+        supabase.from("leave_types").select("name").eq("id", current.leave_type_id).single(),
+      ]);
+      if (requester) {
+        await notifyNewLeaveRequest({
+          approverEmail: nextLevel.approver.email,
+          requesterEmail: requester.email,
+          requestNo: current.request_no,
+          leaveTypeName: leaveType?.name ?? "",
+          startDate: current.start_date,
+          endDate: current.end_date,
+          totalDays: current.total_days,
+          requestUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/leave-requests/${current.request_no}`,
+        });
       }
     } catch {
       // Non-fatal — see comment above.
@@ -205,8 +205,11 @@ export async function decideOnPendingRequest({
     toStatus: decision,
     approverId: actor.id,
     approverNote: note,
-    // A returned request restarts the chain from level 1 on its next submission.
-    currentLevel: decision === "returned" ? 1 : undefined,
+    // A returned request restarts the chain at its (current) lowest level —
+    // resubmission re-resolves this anyway (see submit/route.ts), but this
+    // keeps a 'returned' row's stored level from pointing at whichever
+    // approver it happened to be sitting with when it was returned.
+    currentLevel: decision === "returned" ? (chain.type === "chain" ? (chain.levels[0]?.level ?? 1) : 1) : undefined,
   });
 
   if (!result.ok) return result;

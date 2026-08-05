@@ -33,7 +33,7 @@ export default function LoginPage() {
       <div className="flex flex-col items-center gap-3 text-center">
         <Logo className="h-16 w-16 rounded-2xl shadow-lg shadow-primary/25" />
         <h1 className="text-2xl font-bold tracking-tight text-foreground">ระบบบันทึกการลา</h1>
-        <p className="text-muted-foreground">เข้าสู่ระบบด้วยบัญชี Google ขององค์กร</p>
+        <p className="text-muted-foreground">เข้าสู่ระบบด้วยบัญชี Google </p>
       </div>
 
       <Button

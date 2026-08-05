@@ -5,15 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ChevronUp, ChevronDown } from "lucide-react";
-import {
-  createTeam,
-  renameTeam,
-  setTeamActive,
-  assignTeamLeadByEmail,
-  removeTeamLead,
-  removePendingInvite,
-  moveTeamLead,
-} from "./actions";
+import { createTeam, renameTeam, setTeamActive, removeTeamLead, removePendingInvite, moveTeamLead } from "./actions";
+import { AssignTeamLeadForm } from "./assign-team-lead-form";
 
 export default async function TeamsSettingsPage() {
   await requireAdmin();
@@ -35,8 +28,9 @@ export default async function TeamsSettingsPage() {
         <p className="text-sm text-muted-foreground">
           พิมพ์อีเมล Gmail เพื่อกำหนดหัวหน้าทีมได้เลย ไม่ว่าคนนั้นจะเคยเข้าสู่ระบบแล้วหรือยังไม่เคยก็ตาม (ถ้ายังไม่เคย
           เข้าระบบ ระบบจะจำสิทธิ์/ทีม/ลำดับไว้ให้อัตโนมัติตอนเขา login ครั้งแรก) — ระบบจะปรับสิทธิ์เป็น
-          &quot;หัวหน้าทีม&quot; ให้อัตโนมัติ ผู้อนุมัติแต่ละคนเป็นหัวหน้าได้ทีมเดียวเท่านั้น ถ้ามีหัวหน้าหลายคน
-          คำขอลาต้องผ่านการอนุมัติตามลำดับ (ลำดับ 1 อนุมัติก่อน จึงส่งต่อลำดับถัดไป) ใช้ลูกศรเพื่อจัดลำดับ
+          &quot;หัวหน้าทีม&quot; ให้อัตโนมัติ หัวหน้าคนเดียวดูแลอนุมัติได้หลายทีมพร้อมกัน (จัดการเพิ่ม/ลดทีมที่ดูแลได้ที่
+          หน้าผู้ใช้งานและสิทธิ์) ถ้าทีมไหนมีหัวหน้าหลายคน คำขอลาของทีมนั้นต้องผ่านการอนุมัติตามลำดับ (ลำดับ 1
+          อนุมัติก่อน จึงส่งต่อลำดับถัดไป) ใช้ลูกศรเพื่อจัดลำดับ
         </p>
       </div>
 
@@ -130,13 +124,7 @@ export default async function TeamsSettingsPage() {
                   </div>
                 ))}
 
-                <form action={assignTeamLeadByEmail} className="flex gap-2 pt-2">
-                  <input type="hidden" name="team_id" value={team.id} />
-                  <Input name="email" type="email" placeholder="อีเมล Gmail ของหัวหน้าทีม" required className="h-9 flex-1" />
-                  <Button type="submit" size="sm" variant="outline">
-                    เพิ่ม
-                  </Button>
-                </form>
+                <AssignTeamLeadForm teamId={team.id} />
               </CardContent>
             </Card>
           );

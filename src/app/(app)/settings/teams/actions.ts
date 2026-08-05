@@ -80,10 +80,8 @@ export async function assignTeamLeadByEmail(formData: FormData) {
     await supabase.from("users").update({ team_id: teamId }).eq("id", user.id);
   }
 
-  // A user can only lead one team at a time (mirrors updateUserTeam's cleanup
-  // when a user's team_id changes) — drop any other team's lead row for them
-  // before adding this one.
-  await supabase.from("team_leads").delete().eq("user_id", user.id).neq("team_id", teamId);
+  // A person can lead more than one team at once — no cleanup of their
+  // other team_leads rows here.
 
   // New lead goes last in the approval order (e.g. adding a 2nd lead makes
   // them the level-2 approver, after the existing level 1).
@@ -155,9 +153,9 @@ export async function removeTeamLead(formData: FormData) {
   const { data: lead } = await supabase.from("team_leads").select("user_id").eq("id", id).maybeSingle();
   await supabase.from("team_leads").delete().eq("id", id);
 
-  // Mirror addTeamLead's auto-promotion: if this was their last team, they no
-  // longer lead anything, so drop the approver role back to plain user
-  // (never touch admin).
+  // Mirror assignTeamLeadByEmail's auto-promotion: if this was their last
+  // team, they no longer lead anything, so drop the approver role back to
+  // plain user (never touch admin).
   if (lead) {
     const { data: user } = await supabase.from("users").select("role").eq("id", lead.user_id).maybeSingle();
     const { count } = await supabase

@@ -1,8 +1,8 @@
 import "server-only";
-import { Resend } from "resend";
+import nodemailer, { type Transporter } from "nodemailer";
 import { formatThaiDate } from "@/lib/date";
 
-const FROM = process.env.RESEND_FROM_EMAIL || "Leave System <noreply@example.com>";
+const FROM = process.env.GMAIL_USER ? `ระบบบันทึกการลา <${process.env.GMAIL_USER}>` : "";
 
 // All interpolated values below come from user-controlled data (full names,
 // free-text reasons/notes) — escape before embedding in HTML to prevent
@@ -16,13 +16,27 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
-function getResendClient(): Resend | null {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) {
-    console.warn("RESEND_API_KEY is not set — skipping email send.");
+// Sends straight through Gmail's own SMTP (smtp.gmail.com) using an App
+// Password — no third-party email service involved. GMAIL_USER is the
+// sending Gmail address; GMAIL_APP_PASSWORD is a 16-char App Password
+// generated at https://myaccount.google.com/apppasswords (requires 2FA on
+// that account — a normal account password will be rejected by Gmail).
+let cachedTransporter: Transporter | null = null;
+
+function getMailTransporter(): Transporter | null {
+  const user = process.env.GMAIL_USER;
+  const pass = process.env.GMAIL_APP_PASSWORD;
+  if (!user || !pass) {
+    console.warn("GMAIL_USER / GMAIL_APP_PASSWORD is not set — skipping email send.");
     return null;
   }
-  return new Resend(apiKey);
+  if (!cachedTransporter) {
+    cachedTransporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: { user, pass },
+    });
+  }
+  return cachedTransporter;
 }
 
 function emailShell(title: string, bodyHtml: string): string {
@@ -80,8 +94,8 @@ export async function notifyNewLeaveRequest(params: {
   totalDays: number | null;
   requestUrl: string;
 }): Promise<void> {
-  const resend = getResendClient();
-  if (!resend) return;
+  const transporter = getMailTransporter();
+  if (!transporter) return;
 
   const body = `
     <p>เรียนคุณ ${escapeHtml(params.approverName)}</p>
@@ -96,7 +110,7 @@ export async function notifyNewLeaveRequest(params: {
     ${ctaButton(params.requestUrl, "ดูรายละเอียดและอนุมัติ")}
   `;
 
-  await resend.emails.send({
+  await transporter.sendMail({
     from: FROM,
     to: params.approverEmail,
     subject: `[รออนุมัติ] คำขอลาจาก ${params.requesterName}`,
@@ -122,8 +136,8 @@ export async function notifyLeaveDecision(params: {
   approverNote?: string | null;
   requestUrl: string;
 }): Promise<void> {
-  const resend = getResendClient();
-  if (!resend) return;
+  const transporter = getMailTransporter();
+  if (!transporter) return;
 
   const decisionLabel = DECISION_LABEL[params.decision];
   const body = `
@@ -139,7 +153,7 @@ export async function notifyLeaveDecision(params: {
     ${ctaButton(params.requestUrl, "ดูรายละเอียด")}
   `;
 
-  await resend.emails.send({
+  await transporter.sendMail({
     from: FROM,
     to: params.requesterEmail,
     subject: `[${decisionLabel}] คำขอลาเลขที่ ${params.requestNo ?? "-"}`,

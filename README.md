@@ -2,7 +2,7 @@
 
 A mobile-first, installable (PWA) leave-request/approval app for a small organization (~20 people, 2 team leads). Thai UI, red/white theme. Full spec: [docs/PROMPT.md](docs/PROMPT.md).
 
-**Stack:** Next.js 14 (App Router, TypeScript, strict) · Supabase (Postgres + Row Level Security + Google OAuth) · Resend (email) · exceljs (Excel export) · Tailwind CSS · Vercel (deploy).
+**Stack:** Next.js 14 (App Router, TypeScript, strict) · Supabase (Postgres + Row Level Security + Google OAuth) · Gmail SMTP via nodemailer (email) · exceljs (Excel export) · Tailwind CSS · Vercel (deploy).
 
 ## Features
 
@@ -20,7 +20,7 @@ A mobile-first, installable (PWA) leave-request/approval app for a small organiz
 
 - Node.js 20+
 - A [Supabase](https://supabase.com) project
-- A [Resend](https://resend.com) account (for email notifications — optional for local dev, the app degrades gracefully without it)
+- A Gmail account with 2-Step Verification enabled (for email notifications — optional for local dev, the app degrades gracefully without it)
 - A Google Cloud OAuth client (for Google sign-in)
 
 ## 1. Supabase setup
@@ -51,11 +51,14 @@ A mobile-first, installable (PWA) leave-request/approval app for a small organiz
 2. Authorized redirect URI: the callback URL shown on Supabase's Google provider settings page (looks like `https://<project-ref>.supabase.co/auth/v1/callback`).
 3. Copy the Client ID/Secret into Supabase's Google provider settings.
 
-## 2. Resend setup (optional for local dev)
+## 2. Gmail setup (optional for local dev)
 
-1. Create an API key at [resend.com/api-keys](https://resend.com/api-keys).
-2. Verify a sending domain (or use Resend's test mode while developing).
-3. Set `RESEND_API_KEY` and `RESEND_FROM_EMAIL` in your env — see below. Without `RESEND_API_KEY` set, the app logs a warning and skips sending instead of failing the request.
+Emails are sent directly through Gmail's own SMTP server (`smtp.gmail.com`) via `nodemailer` — no third-party email service involved.
+
+1. Turn on 2-Step Verification on the sending Gmail account (required — Gmail rejects App Passwords otherwise).
+2. Create an App Password at [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords) (choose app "Mail", any device name) — it gives you a 16-character password, different from your normal Gmail password.
+3. Set `GMAIL_USER` (the full Gmail address) and `GMAIL_APP_PASSWORD` (the 16-char App Password, no spaces) in your env — see below. Without both set, the app logs a warning and skips sending instead of failing the request.
+4. Gmail's free SMTP has a ~500 emails/day sending limit — plenty for a ~20-person team.
 
 ## 3. Environment variables
 
@@ -69,8 +72,8 @@ cp .env.example .env.local
 NEXT_PUBLIC_SUPABASE_URL=            # Project Settings > API
 NEXT_PUBLIC_SUPABASE_ANON_KEY=       # Project Settings > API
 SUPABASE_SERVICE_ROLE_KEY=           # Project Settings > API — server-only, never expose to the client
-RESEND_API_KEY=
-RESEND_FROM_EMAIL="Leave System <noreply@yourdomain.com>"
+GMAIL_USER=
+GMAIL_APP_PASSWORD=
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 CRON_SECRET=                          # any random string — see "Holidays" below
 ```

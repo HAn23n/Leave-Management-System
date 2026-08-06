@@ -74,20 +74,6 @@ export async function updateMemberTeams(formData: FormData) {
   revalidatePath("/settings/users");
 }
 
-export async function selectAllMemberTeams(formData: FormData) {
-  await requireAdmin();
-  const id = String(formData.get("id"));
-
-  const supabase = createServerSupabaseClient();
-  const { data: teams } = await supabase.from("teams").select("id").eq("is_active", true);
-  await syncMemberships(supabase, "user_teams", id, (teams ?? []).map((t) => t.id), async (teamId) => {
-    const { error } = await supabase.from("user_teams").insert({ user_id: id, team_id: teamId });
-    if (error) throw error;
-  });
-
-  revalidatePath("/settings/users");
-}
-
 // Role follows automatically from team_leads membership either direction —
 // see trg_team_leads_sync_role (migration 0018).
 export async function updateApprovedTeams(formData: FormData) {
@@ -97,20 +83,6 @@ export async function updateApprovedTeams(formData: FormData) {
 
   const supabase = createServerSupabaseClient();
   await syncMemberships(supabase, "team_leads", id, teamIds, (teamId) => addTeamLead(supabase, teamId, id));
-
-  revalidatePath("/settings/users");
-  revalidatePath("/settings/teams");
-}
-
-export async function selectAllApprovedTeams(formData: FormData) {
-  await requireAdmin();
-  const id = String(formData.get("id"));
-
-  const supabase = createServerSupabaseClient();
-  const { data: teams } = await supabase.from("teams").select("id").eq("is_active", true);
-  await syncMemberships(supabase, "team_leads", id, (teams ?? []).map((t) => t.id), (teamId) =>
-    addTeamLead(supabase, teamId, id)
-  );
 
   revalidatePath("/settings/users");
   revalidatePath("/settings/teams");
@@ -141,27 +113,30 @@ export async function preProvisionUser(formData: FormData) {
     .trim()
     .toLowerCase();
   const role = String(formData.get("role") ?? "user");
-  const rawTeamId = String(formData.get("team_id") || "");
-  const teamId = rawTeamId === "none" ? null : rawTeamId || null;
+  const teamIds = formData.getAll("team_ids").map(String);
   if (!email || !PROVISIONABLE_ROLES.includes(role as UserRole)) return;
 
   const supabase = createServerSupabaseClient();
   const { data: existingUser } = await supabase.from("users").select("id").eq("email", email).maybeSingle();
 
   if (existingUser) {
-    // Already signed in before — apply directly instead of queueing. Team
-    // membership goes through user_teams (users.team_id just follows along —
-    // see sync_user_home_team, migration 0023), not a direct column write.
+    // Already signed in before — apply directly instead of queueing. This
+    // form only grants/adds access, so team selection here is additive —
+    // it never removes a team they already belong to (unlike the per-user
+    // "ทีมที่เป็นสมาชิก" checklist below, which reconciles to exactly what's
+    // checked). Membership goes through user_teams (users.team_id just
+    // follows along — see sync_user_home_team, migration 0023).
     await supabase.from("users").update({ role: role as UserRole }).eq("id", existingUser.id);
-    if (teamId) {
+    for (const teamId of teamIds) {
       await supabase
         .from("user_teams")
         .upsert({ user_id: existingUser.id, team_id: teamId }, { onConflict: "user_id,team_id", ignoreDuplicates: true });
     }
   } else {
-    await supabase
-      .from("pending_user_roles")
-      .upsert({ email, role: role as UserRole, team_id: teamId }, { onConflict: "email" });
+    await supabase.from("pending_user_roles").upsert({ email, role: role as UserRole }, { onConflict: "email" });
+    for (const teamId of teamIds) {
+      await supabase.from("pending_user_teams").upsert({ email, team_id: teamId }, { onConflict: "email,team_id" });
+    }
   }
 
   revalidatePath("/settings/users");
@@ -172,6 +147,9 @@ export async function removePendingUser(formData: FormData) {
   const email = String(formData.get("email"));
 
   const supabase = createServerSupabaseClient();
-  await supabase.from("pending_user_roles").delete().eq("email", email);
+  await Promise.all([
+    supabase.from("pending_user_roles").delete().eq("email", email),
+    supabase.from("pending_user_teams").delete().eq("email", email),
+  ]);
   revalidatePath("/settings/users");
 }

@@ -4,12 +4,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { TeamChecklist } from "./team-checklist";
 import {
   updateUserRole,
   updateMemberTeams,
-  selectAllMemberTeams,
   updateApprovedTeams,
-  selectAllApprovedTeams,
   setUserActive,
   preProvisionUser,
   removePendingUser,
@@ -21,14 +20,21 @@ export default async function UsersSettingsPage() {
   await requireAdmin();
   const supabase = createServerSupabaseClient();
 
-  const [{ data: users }, { data: teams }, { data: teamLeads }, { data: userTeams }, { data: pendingUsers }] =
-    await Promise.all([
-      supabase.from("users").select("*").order("email"),
-      supabase.from("teams").select("id, name").eq("is_active", true).order("name"),
-      supabase.from("team_leads").select("user_id, team_id"),
-      supabase.from("user_teams").select("user_id, team_id"),
-      supabase.from("pending_user_roles").select("*").order("created_at"),
-    ]);
+  const [
+    { data: users },
+    { data: teams },
+    { data: teamLeads },
+    { data: userTeams },
+    { data: pendingUsers },
+    { data: pendingUserTeams },
+  ] = await Promise.all([
+    supabase.from("users").select("*").order("email"),
+    supabase.from("teams").select("id, name").eq("is_active", true).order("name"),
+    supabase.from("team_leads").select("user_id, team_id"),
+    supabase.from("user_teams").select("user_id, team_id"),
+    supabase.from("pending_user_roles").select("*").order("created_at"),
+    supabase.from("pending_user_teams").select("*"),
+  ]);
 
   const teamMap = new Map((teams ?? []).map((t) => [t.id, t.name]));
 
@@ -42,63 +48,61 @@ export default async function UsersSettingsPage() {
           ต้องเพิ่มอีเมลไว้ที่นี่ก่อน คนนั้นถึงจะเข้าสู่ระบบด้วย Google ได้ (หรือกำหนดเป็นหัวหน้าทีมได้ที่หน้า
           &quot;ทีม&quot; แทน)
         </p>
-        <form action={preProvisionUser} className="mt-3 flex flex-wrap items-center gap-2">
-          <Input name="email" type="email" placeholder="อีเมล Gmail" required className="h-9 w-56" />
-          <Select name="role" defaultValue="user">
-            <SelectTrigger className="h-9 w-40">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="user">developer</SelectItem>
-              <SelectItem value="admin">ผู้ดูแลระบบ</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select name="team_id" defaultValue="none">
-            <SelectTrigger className="h-9 w-40">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">ไม่มีทีม</SelectItem>
-              {(teams ?? []).map((t) => (
-                <SelectItem key={t.id} value={t.id}>
-                  {t.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button type="submit" size="sm">
+        <form action={preProvisionUser} className="mt-3 flex flex-col gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Input name="email" type="email" placeholder="อีเมล Gmail" required className="h-9 w-56" />
+            <Select name="role" defaultValue="user">
+              <SelectTrigger className="h-9 w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="user">developer</SelectItem>
+                <SelectItem value="admin">ผู้ดูแลระบบ</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            {(teams ?? []).map((t) => (
+              <label key={t.id} className="flex items-center gap-1.5 text-sm text-foreground">
+                <input type="checkbox" name="team_ids" value={t.id} className="h-4 w-4 rounded border-input accent-primary" />
+                {t.name}
+              </label>
+            ))}
+          </div>
+          <Button type="submit" size="sm" className="self-start">
             เพิ่มสิทธิ์
           </Button>
         </form>
 
         {(pendingUsers ?? []).length > 0 && (
           <div className="mt-3 flex flex-col gap-1.5 border-t border-border pt-3">
-            {(pendingUsers ?? []).map((p) => (
-              <div key={p.email} className="flex items-center justify-between text-sm text-muted-foreground">
-                <span>
-                  {p.email} · {ROLE_LABEL[p.role]}
-                  {p.team_id && ` · ${teamMap.get(p.team_id) ?? "-"}`} <Badge variant="outline">รอเข้าระบบครั้งแรก</Badge>
-                </span>
-                <form action={removePendingUser}>
-                  <input type="hidden" name="email" value={p.email} />
-                  <Button type="submit" size="sm" variant="ghost">
-                    ยกเลิก
-                  </Button>
-                </form>
-              </div>
-            ))}
+            {(pendingUsers ?? []).map((p) => {
+              const teamNames = (pendingUserTeams ?? [])
+                .filter((pt) => pt.email === p.email)
+                .map((pt) => teamMap.get(pt.team_id) ?? "-");
+              return (
+                <div key={p.email} className="flex items-center justify-between text-sm text-muted-foreground">
+                  <span>
+                    {p.email} · {ROLE_LABEL[p.role]}
+                    {teamNames.length > 0 && ` · ${teamNames.join(", ")}`} <Badge variant="outline">รอเข้าระบบครั้งแรก</Badge>
+                  </span>
+                  <form action={removePendingUser}>
+                    <input type="hidden" name="email" value={p.email} />
+                    <Button type="submit" size="sm" variant="ghost">
+                      ยกเลิก
+                    </Button>
+                  </form>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
 
       <div className="flex flex-col gap-3">
         {(users ?? []).map((u) => {
-          const approvedTeamIds = new Set(
-            (teamLeads ?? []).filter((tl) => tl.user_id === u.id).map((tl) => tl.team_id)
-          );
-          const memberTeamIds = new Set(
-            (userTeams ?? []).filter((ut) => ut.user_id === u.id).map((ut) => ut.team_id)
-          );
+          const approvedTeamIds = (teamLeads ?? []).filter((tl) => tl.user_id === u.id).map((tl) => tl.team_id);
+          const memberTeamIds = (userTeams ?? []).filter((ut) => ut.user_id === u.id).map((ut) => ut.team_id);
 
           return (
             <div key={u.id} className="rounded-lg border border-border bg-white p-4">
@@ -147,66 +151,30 @@ export default async function UsersSettingsPage() {
 
               <div className="mt-3 border-t border-border pt-3">
                 <p className="text-xs font-medium text-muted-foreground">ทีมที่เป็นสมาชิก (เลือกได้หลายทีม)</p>
-                <form action={updateMemberTeams} className="mt-2 flex flex-col gap-2">
-                  <input type="hidden" name="id" value={u.id} />
-                  <div className="flex flex-wrap gap-3">
-                    {(teams ?? []).map((t) => (
-                      <label key={t.id} className="flex items-center gap-1.5 text-sm text-foreground">
-                        <input
-                          type="checkbox"
-                          name="team_ids"
-                          value={t.id}
-                          defaultChecked={memberTeamIds.has(t.id)}
-                          className="h-4 w-4 rounded border-input accent-primary"
-                        />
-                        {t.name}
-                      </label>
-                    ))}
-                    {(teams ?? []).length === 0 && (
-                      <span className="text-sm text-muted-foreground">ยังไม่มีทีมในระบบ</span>
-                    )}
-                  </div>
-                  <div className="flex gap-2">
-                    <Button type="submit" size="sm" variant="outline">
-                      บันทึกทีมที่เป็นสมาชิก
-                    </Button>
-                    <Button type="submit" formAction={selectAllMemberTeams} size="sm" variant="ghost">
-                      เลือกทั้งหมด
-                    </Button>
-                  </div>
-                </form>
+                <div className="mt-2">
+                  <TeamChecklist
+                    userId={u.id}
+                    teams={teams ?? []}
+                    initialSelected={memberTeamIds}
+                    action={updateMemberTeams}
+                    saveLabel="บันทึกทีมที่เป็นสมาชิก"
+                    successTitle="บันทึกทีมที่เป็นสมาชิกแล้ว"
+                  />
+                </div>
               </div>
 
               <div className="mt-3 border-t border-border pt-3">
                 <p className="text-xs font-medium text-muted-foreground">ทีมที่ดูแลอนุมัติ (เลือกได้หลายทีม)</p>
-                <form action={updateApprovedTeams} className="mt-2 flex flex-col gap-2">
-                  <input type="hidden" name="id" value={u.id} />
-                  <div className="flex flex-wrap gap-3">
-                    {(teams ?? []).map((t) => (
-                      <label key={t.id} className="flex items-center gap-1.5 text-sm text-foreground">
-                        <input
-                          type="checkbox"
-                          name="team_ids"
-                          value={t.id}
-                          defaultChecked={approvedTeamIds.has(t.id)}
-                          className="h-4 w-4 rounded border-input accent-primary"
-                        />
-                        {t.name}
-                      </label>
-                    ))}
-                    {(teams ?? []).length === 0 && (
-                      <span className="text-sm text-muted-foreground">ยังไม่มีทีมในระบบ</span>
-                    )}
-                  </div>
-                  <div className="flex gap-2">
-                    <Button type="submit" size="sm" variant="outline">
-                      บันทึกทีมที่ดูแล
-                    </Button>
-                    <Button type="submit" formAction={selectAllApprovedTeams} size="sm" variant="ghost">
-                      เลือกทั้งหมด
-                    </Button>
-                  </div>
-                </form>
+                <div className="mt-2">
+                  <TeamChecklist
+                    userId={u.id}
+                    teams={teams ?? []}
+                    initialSelected={approvedTeamIds}
+                    action={updateApprovedTeams}
+                    saveLabel="บันทึกทีมที่ดูแล"
+                    successTitle="บันทึกทีมที่ดูแลแล้ว"
+                  />
+                </div>
               </div>
             </div>
           );

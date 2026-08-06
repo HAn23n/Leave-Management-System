@@ -33,7 +33,11 @@ export async function GET(request: NextRequest) {
   }
 
   const rows = requests ?? [];
-  const { userMap, leaveTypeMap, teamMap } = await loadReportLookups(supabase, rows);
+  const [{ userMap, leaveTypeMap, teamMap }, { data: attendanceSettings }] = await Promise.all([
+    loadReportLookups(supabase, rows),
+    supabase.from("attendance_settings").select("standard_work_hours").eq("id", 1).maybeSingle(),
+  ]);
+  const hoursPerDay = attendanceSettings?.standard_work_hours ?? 8;
 
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "ระบบบันทึกการลา";
@@ -49,6 +53,7 @@ export async function GET(request: NextRequest) {
     { header: "วันที่สิ้นสุด", key: "end_date", width: 14 },
     { header: "ช่วงเวลาสิ้นสุด", key: "end_period", width: 14 },
     { header: "จำนวนวัน", key: "total_days", width: 10 },
+    { header: "จำนวนชั่วโมง", key: "total_hours", width: 12 },
     { header: "สถานะ", key: "status", width: 12 },
     { header: "ผู้อนุมัติ", key: "approver", width: 22 },
     { header: "หมายเหตุ", key: "note", width: 24 },
@@ -69,6 +74,7 @@ export async function GET(request: NextRequest) {
       end_date: formatThaiDate(r.end_date, "iso-be"),
       end_period: PERIOD_LABEL_TH[r.end_period],
       total_days: r.total_days ?? "",
+      total_hours: r.total_days != null ? r.total_days * hoursPerDay : "",
       status: STATUS_LABEL_TH[r.status],
       approver: r.approver_id ? userMap.get(r.approver_id) ?? "" : "",
       note: r.approver_note ?? "",

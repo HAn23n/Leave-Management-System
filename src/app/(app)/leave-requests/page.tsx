@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireAppUser } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { formatThaiDate } from "@/lib/date";
 import { STATUS_LABEL_TH, STATUS_BADGE_VARIANT } from "@/lib/status";
 import { Badge } from "@/components/ui/badge";
@@ -84,16 +85,28 @@ export default async function LeaveRequestsSearchPage({
     query = query.lte("start_date", searchParams.to);
   }
 
-  const [{ data: requests }, { data: leaveTypes }, { data: users }, { data: holidayRows }, { data: ownLeadRows }] =
-    await Promise.all([
-      query,
-      supabase.from("leave_types").select("id, name, color"),
-      supabase.from("users").select("id, email, nickname"),
-      supabase.from("holidays").select("holiday_date, name"),
-      appUser.role === "approver"
-        ? supabase.from("team_leads").select("team_id, approval_order").eq("user_id", appUser.id)
-        : Promise.resolve({ data: null }),
-    ]);
+  const [{ data: requests }, { data: leaveTypes }, { data: holidayRows }, { data: ownLeadRows }] = await Promise.all([
+    query,
+    supabase.from("leave_types").select("id, name, color"),
+    supabase.from("holidays").select("holiday_date, name"),
+    appUser.role === "approver"
+      ? supabase.from("team_leads").select("team_id, approval_order").eq("user_id", appUser.id)
+      : Promise.resolve({ data: null }),
+  ]);
+
+  // Names come from the admin client, scoped to just the requesters in this
+  // already-RLS-filtered result set — the same reasoning as the request
+  // detail page: if a row is visible here at all, who filed it shouldn't
+  // then blank out to "-" because their *current* team membership happens to
+  // not line up with users_select (e.g. they left the team since filing).
+  const requesterIds = Array.from(new Set((requests ?? []).map((r) => r.user_id)));
+  const { data: users } =
+    requesterIds.length > 0
+      ? await createAdminSupabaseClient()
+          .from("users")
+          .select("id, email, nickname")
+          .in("id", requesterIds)
+      : { data: [] as { id: string; email: string; nickname: string | null }[] };
 
   const leaveTypeMap = new Map((leaveTypes ?? []).map((lt) => [lt.id, lt]));
   const userMap = new Map((users ?? []).map((u) => [u.id, displayName(u)]));

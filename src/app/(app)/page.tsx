@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireAppUser } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { nowInBangkok, todayIso } from "@/lib/date";
 import { STATUS_LABEL_TH, STATUS_ACCENT_CLASS } from "@/lib/status";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -47,8 +48,12 @@ async function loadPendingTeamRequests(supabase: SupabaseClient<Database>) {
   if (pendingTeamRequests && pendingTeamRequests.length > 0) {
     const userIds = Array.from(new Set(pendingTeamRequests.map((r) => r.user_id)));
     const leaveTypeIds = Array.from(new Set(pendingTeamRequests.map((r) => r.leave_type_id)));
+    // Admin client, scoped to just the requesters in this already-RLS-filtered
+    // result set — see the same fix on the request detail/search pages: a
+    // requester's *current* team membership shouldn't be able to blank out
+    // their name on a request this viewer is already allowed to see.
     const [{ data: users }, { data: pendingLeaveTypes }] = await Promise.all([
-      supabase.from("users").select("id, email, nickname").in("id", userIds),
+      createAdminSupabaseClient().from("users").select("id, email, nickname").in("id", userIds),
       supabase.from("leave_types").select("id, name").in("id", leaveTypeIds),
     ]);
     requesterMap = new Map((users ?? []).map((u) => [u.id, displayName(u)]));

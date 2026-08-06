@@ -21,7 +21,7 @@ export default async function LeaveRequestDetailPage({ params }: { params: { req
 
   const [{ data: leaveType }, { data: requester }, { data: approver }, { data: logs }] = await Promise.all([
     supabase.from("leave_types").select("name").eq("id", leaveRequest.leave_type_id).maybeSingle(),
-    supabase.from("users").select("email").eq("id", leaveRequest.user_id).maybeSingle(),
+    supabase.from("users").select("email, nickname").eq("id", leaveRequest.user_id).maybeSingle(),
     leaveRequest.approver_id
       ? supabase.from("users").select("email").eq("id", leaveRequest.approver_id).maybeSingle()
       : Promise.resolve({ data: null }),
@@ -110,7 +110,7 @@ export default async function LeaveRequestDetailPage({ params }: { params: { req
           {leaveRequest.request_no && (
             <Row label="เลขที่เอกสาร" value={leaveRequest.request_no} />
           )}
-          <Row label="ผู้ขอลา" value={requester?.email ?? "-"} />
+          <Row label="ผู้ขอลา" value={requester?.nickname || requester?.email || "-"} />
           <Row
             label="วันที่เริ่ม"
             value={`${formatThaiDate(leaveRequest.start_date)} (${PERIOD_LABEL_TH[leaveRequest.start_period]})`}

@@ -47,10 +47,10 @@ async function loadPendingTeamRequests(supabase: SupabaseClient<Database>) {
     const userIds = Array.from(new Set(pendingTeamRequests.map((r) => r.user_id)));
     const leaveTypeIds = Array.from(new Set(pendingTeamRequests.map((r) => r.leave_type_id)));
     const [{ data: users }, { data: pendingLeaveTypes }] = await Promise.all([
-      supabase.from("users").select("id, email").in("id", userIds),
+      supabase.from("users").select("id, email, nickname").in("id", userIds),
       supabase.from("leave_types").select("id, name").in("id", leaveTypeIds),
     ]);
-    requesterMap = new Map((users ?? []).map((u) => [u.id, u.email]));
+    requesterMap = new Map((users ?? []).map((u) => [u.id, u.nickname || u.email]));
     leaveTypeMap = new Map((pendingLeaveTypes ?? []).map((lt) => [lt.id, lt.name]));
   }
 

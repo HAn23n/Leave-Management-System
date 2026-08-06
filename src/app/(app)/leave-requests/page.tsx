@@ -79,7 +79,7 @@ export default async function LeaveRequestsSearchPage({
     await Promise.all([
       query,
       supabase.from("leave_types").select("id, name, color"),
-      supabase.from("users").select("id, email"),
+      supabase.from("users").select("id, email, nickname"),
       supabase.from("holidays").select("holiday_date, name"),
       appUser.role === "approver"
         ? supabase.from("team_leads").select("team_id, approval_order").eq("user_id", appUser.id)
@@ -87,7 +87,7 @@ export default async function LeaveRequestsSearchPage({
     ]);
 
   const leaveTypeMap = new Map((leaveTypes ?? []).map((lt) => [lt.id, lt]));
-  const userMap = new Map((users ?? []).map((u) => [u.id, u.email]));
+  const userMap = new Map((users ?? []).map((u) => [u.id, u.nickname || u.email]));
   const holidayMap = new Map((holidayRows ?? []).map((h) => [h.holiday_date, h.name]));
   // A pending request whose current_level has already moved past this
   // approver's own chain position means they already acted (approved) on

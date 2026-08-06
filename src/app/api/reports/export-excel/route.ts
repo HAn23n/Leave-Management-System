@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
 
   sheet.columns = [
     { header: "เลขที่เอกสาร", key: "request_no", width: 16 },
-    { header: "อีเมลพนักงาน", key: "employee", width: 26 },
+    { header: "พนักงาน", key: "employee", width: 26 },
     { header: "ทีม", key: "team", width: 14 },
     { header: "ประเภทการลา", key: "leave_type", width: 16 },
     { header: "วันที่เริ่ม", key: "start_date", width: 14 },
@@ -76,7 +76,7 @@ export async function GET(request: NextRequest) {
     const levels = approvalChains.get(r.id) ?? [];
     const approverColumns: Record<string, string> = {};
     for (let i = 0; i < maxLevels; i++) {
-      approverColumns[`approver_level_${i + 1}`] = levels[i] ? levels[i].emails.join(", ") : "";
+      approverColumns[`approver_level_${i + 1}`] = levels[i] ? levels[i].names.join(", ") : "";
     }
 
     sheet.addRow({

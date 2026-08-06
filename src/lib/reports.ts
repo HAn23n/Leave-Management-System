@@ -36,7 +36,7 @@ export function buildReportQuery(supabase: SupabaseClient<Database>, filters: Re
 
 export interface ReportApprovalLevel {
   level: number;
-  emails: string[];
+  names: string[];
 }
 
 /**
@@ -69,35 +69,35 @@ export async function loadApprovalChainsForReport(
   );
   const { data: approverUsers } =
     approverIds.length > 0
-      ? await supabase.from("users").select("id, email").in("id", approverIds)
-      : { data: [] as { id: string; email: string }[] };
-  const emailMap = new Map((approverUsers ?? []).map((u) => [u.id, u.email]));
+      ? await supabase.from("users").select("id, email, nickname").in("id", approverIds)
+      : { data: [] as { id: string; email: string; nickname: string | null }[] };
+  const nameMap = new Map((approverUsers ?? []).map((u) => [u.id, u.nickname || u.email]));
 
   const overridesByUser = new Map<string, string[]>();
   for (const o of overrides ?? []) {
-    const email = emailMap.get(o.approver_id);
-    if (!email) continue;
+    const name = nameMap.get(o.approver_id);
+    if (!name) continue;
     const list = overridesByUser.get(o.user_id) ?? [];
-    list.push(email);
+    list.push(name);
     overridesByUser.set(o.user_id, list);
   }
 
   const leadsByTeam = new Map<string, ReportApprovalLevel[]>();
   for (const l of leads ?? []) {
-    const email = emailMap.get(l.user_id);
-    if (!email) continue;
+    const name = nameMap.get(l.user_id);
+    if (!name) continue;
     const levels = leadsByTeam.get(l.team_id) ?? [];
     const existing = levels.find((lv) => lv.level === l.approval_order);
-    if (existing) existing.emails.push(email);
-    else levels.push({ level: l.approval_order, emails: [email] });
+    if (existing) existing.names.push(name);
+    else levels.push({ level: l.approval_order, names: [name] });
     leadsByTeam.set(l.team_id, levels);
   }
   for (const levels of leadsByTeam.values()) levels.sort((a, b) => a.level - b.level);
 
   const result = new Map<string, ReportApprovalLevel[]>();
   for (const r of requests) {
-    const overrideEmails = overridesByUser.get(r.user_id);
-    result.set(r.id, overrideEmails && overrideEmails.length > 0 ? [{ level: 1, emails: overrideEmails }] : (leadsByTeam.get(r.team_id) ?? []));
+    const overrideNames = overridesByUser.get(r.user_id);
+    result.set(r.id, overrideNames && overrideNames.length > 0 ? [{ level: 1, names: overrideNames }] : (leadsByTeam.get(r.team_id) ?? []));
   }
   return result;
 }
@@ -113,7 +113,9 @@ export async function loadReportLookups(
   const teamIds = Array.from(new Set(requests.map((r) => r.team_id)));
 
   const [{ data: users }, { data: leaveTypes }, { data: teams }] = await Promise.all([
-    userIds.length ? supabase.from("users").select("id, email").in("id", userIds) : Promise.resolve({ data: [] }),
+    userIds.length
+      ? supabase.from("users").select("id, email, nickname").in("id", userIds)
+      : Promise.resolve({ data: [] as { id: string; email: string; nickname: string | null }[] }),
     leaveTypeIds.length
       ? supabase.from("leave_types").select("id, name").in("id", leaveTypeIds)
       : Promise.resolve({ data: [] }),
@@ -121,7 +123,7 @@ export async function loadReportLookups(
   ]);
 
   return {
-    userMap: new Map((users ?? []).map((u) => [u.id, u.email])),
+    userMap: new Map((users ?? []).map((u) => [u.id, u.nickname || u.email])),
     leaveTypeMap: new Map((leaveTypes ?? []).map((lt) => [lt.id, lt.name])),
     teamMap: new Map((teams ?? []).map((t) => [t.id, t.name])),
   };

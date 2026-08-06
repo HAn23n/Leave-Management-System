@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { requireAppUser } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { formatThaiDate } from "@/lib/date";
 import { STATUS_LABEL_TH, STATUS_BADGE_VARIANT, PERIOD_LABEL_TH } from "@/lib/status";
 import { Badge } from "@/components/ui/badge";
@@ -20,25 +21,11 @@ export default async function LeaveRequestDetailPage({ params }: { params: { req
 
   if (!leaveRequest) notFound();
 
-  const [{ data: leaveType }, { data: requester }, { data: approver }, { data: logs }] = await Promise.all([
-    supabase.from("leave_types").select("name").eq("id", leaveRequest.leave_type_id).maybeSingle(),
-    supabase.from("users").select("email, nickname").eq("id", leaveRequest.user_id).maybeSingle(),
-    leaveRequest.approver_id
-      ? supabase.from("users").select("email, nickname").eq("id", leaveRequest.approver_id).maybeSingle()
-      : Promise.resolve({ data: null }),
-    supabase
-      .from("leave_request_logs")
-      .select("*")
-      .eq("request_id", leaveRequest.id)
-      .order("created_at", { ascending: true }),
-  ]);
-
-  const actorIds = Array.from(new Set((logs ?? []).map((l) => l.actor_id).filter(Boolean))) as string[];
-  const { data: actors } =
-    actorIds.length > 0
-      ? await supabase.from("users").select("id, email, nickname").in("id", actorIds)
-      : { data: [] as { id: string; email: string; nickname: string | null }[] };
-  const actorMap = new Map((actors ?? []).map((a) => [a.id, displayName(a)]));
+  const { data: leaveType } = await supabase
+    .from("leave_types")
+    .select("name")
+    .eq("id", leaveRequest.leave_type_id)
+    .maybeSingle();
 
   const isOwner = leaveRequest.user_id === appUser.id;
 
@@ -71,6 +58,33 @@ export default async function LeaveRequestDetailPage({ params }: { params: { req
   const isAuthorizedToView = isOwner || appUser.role === "admin" || approverInScopeOfRequest;
   if (!isAuthorizedToView) notFound();
 
+  // Once someone is confirmed authorized to view this specific request
+  // (above), who filed/acted on it shouldn't depend on the viewer's *current*
+  // users_select visibility of those people — team membership can change
+  // after a request is filed (or drift out of sync for other reasons), which
+  // must not silently blank out "ผู้ขอลา"/"ผู้อนุมัติ" on a request someone is
+  // otherwise cleared to see. The admin client bypasses that RLS entirely,
+  // scoped by the authorization check just above.
+  const admin = createAdminSupabaseClient();
+  const [{ data: requester }, { data: approver }, { data: logs }] = await Promise.all([
+    admin.from("users").select("email, nickname").eq("id", leaveRequest.user_id).maybeSingle(),
+    leaveRequest.approver_id
+      ? admin.from("users").select("email, nickname").eq("id", leaveRequest.approver_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    supabase
+      .from("leave_request_logs")
+      .select("*")
+      .eq("request_id", leaveRequest.id)
+      .order("created_at", { ascending: true }),
+  ]);
+
+  const actorIds = Array.from(new Set((logs ?? []).map((l) => l.actor_id).filter(Boolean))) as string[];
+  const { data: actors } =
+    actorIds.length > 0
+      ? await admin.from("users").select("id, email, nickname").in("id", actorIds)
+      : { data: [] as { id: string; email: string; nickname: string | null }[] };
+  const actorMap = new Map((actors ?? []).map((a) => [a.id, displayName(a)]));
+
   const isApproverInScope = appUser.role === "approver" || appUser.role === "admin";
 
   // Sequential approval chain: only the approver assigned to the request's
@@ -100,6 +114,9 @@ export default async function LeaveRequestDetailPage({ params }: { params: { req
         <h1 className="text-lg font-semibold text-foreground">รายละเอียดคำขอลา</h1>
         <Badge variant={STATUS_BADGE_VARIANT[leaveRequest.status]}>
           {STATUS_LABEL_TH[leaveRequest.status]}
+          {leaveRequest.status === "pending" && chain?.type === "chain" && totalLevels > 1 && currentLevelIndex >= 0
+            ? ` (${currentLevelIndex + 1}/${totalLevels})`
+            : ""}
         </Badge>
       </div>
 

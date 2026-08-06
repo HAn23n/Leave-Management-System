@@ -26,15 +26,17 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
   }
 
   const isOwner = existing.user_id === appUser.id;
-  const isPrivileged = appUser.role === "approver" || appUser.role === "admin";
+  const isAdmin = appUser.role === "admin";
+  const isPrivileged = appUser.role === "approver" || isAdmin;
 
   if (!isOwner && !isPrivileged) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  // The owner may only withdraw before a decision is made; an approver/admin
-  // (within their RLS-enforced scope) may also cancel an already-approved leave.
-  const fromStatuses: LeaveStatus[] = isPrivileged
+  // The owner may only withdraw before a decision is made. Only admin may
+  // also cancel an already-decided (approved/returned) leave — an approver's
+  // authority stops at approve/reject/return on their own turn.
+  const fromStatuses: LeaveStatus[] = isAdmin
     ? ["draft", "pending", "approved", "returned"]
     : ["draft", "pending"];
 

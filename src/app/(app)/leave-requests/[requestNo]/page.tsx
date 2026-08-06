@@ -40,6 +40,36 @@ export default async function LeaveRequestDetailPage({ params }: { params: { req
   const actorMap = new Map((actors ?? []).map((a) => [a.id, a.email]));
 
   const isOwner = leaveRequest.user_id === appUser.id;
+
+  // Defense in depth on top of RLS: RLS already scopes which rows this
+  // query can return (owner / admin / approver-of-this-team), so this
+  // should never actually trigger — but an explicit check here means a
+  // future RLS regression fails closed (404) instead of silently leaking
+  // another team's document to whoever guesses its request number.
+  let approverInScopeOfRequest = false;
+  if (!isOwner && appUser.role === "approver") {
+    // Two independent ways an approver is in-scope: leads the request's team
+    // (team_leads), or is that specific requester's cross-team override
+    // approver (approver_mappings) — mirrors the two OR'd RLS select policies.
+    const [{ data: lead }, { data: mapping }] = await Promise.all([
+      supabase
+        .from("team_leads")
+        .select("user_id")
+        .eq("user_id", appUser.id)
+        .eq("team_id", leaveRequest.team_id)
+        .maybeSingle(),
+      supabase
+        .from("approver_mappings")
+        .select("user_id")
+        .eq("user_id", leaveRequest.user_id)
+        .eq("approver_id", appUser.id)
+        .maybeSingle(),
+    ]);
+    approverInScopeOfRequest = !!lead || !!mapping;
+  }
+  const isAuthorizedToView = isOwner || appUser.role === "admin" || approverInScopeOfRequest;
+  if (!isAuthorizedToView) notFound();
+
   const isApproverInScope = appUser.role === "approver" || appUser.role === "admin";
 
   // Sequential approval chain: only the approver assigned to the request's

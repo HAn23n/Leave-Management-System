@@ -5,9 +5,19 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
 
-export default function LoginPage() {
+const CALLBACK_ERROR_TH: Record<string, string> = {
+  missing_code: "เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่อีกครั้ง",
+  auth_failed: "เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่อีกครั้ง",
+  profile_create_failed: "สร้างบัญชีผู้ใช้ไม่สำเร็จ กรุณาลองใหม่อีกครั้ง หรือติดต่อผู้ดูแลระบบ",
+  inactive: "บัญชีนี้ถูกระงับการใช้งาน กรุณาติดต่อผู้ดูแลระบบ",
+  not_provisioned: "บัญชีนี้ยังไม่ได้รับสิทธิ์เข้าใช้งานระบบ กรุณาติดต่อผู้ดูแลระบบให้เพิ่มอีเมลนี้ก่อน",
+};
+
+export default function LoginPage({ searchParams }: { searchParams: { error?: string } }) {
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(
+    searchParams.error ? (CALLBACK_ERROR_TH[searchParams.error] ?? "เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่อีกครั้ง") : null
+  );
 
   async function handleGoogleLogin() {
     setLoading(true);

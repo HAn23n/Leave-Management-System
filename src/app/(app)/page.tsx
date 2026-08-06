@@ -7,6 +7,7 @@ import { STATUS_LABEL_TH, STATUS_ACCENT_CLASS } from "@/lib/status";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LeaveCalendarMonth, type CalendarLeaveDay } from "@/components/leave-calendar";
 import { PendingTeamRequestsCard } from "@/components/pending-team-requests-card";
+import { AttendanceCard } from "@/components/attendance-card";
 import type { Database, LeaveStatus } from "@/lib/supabase/types";
 
 const SUMMARY_STATUSES: LeaveStatus[] = ["draft", "pending", "approved", "rejected", "returned"];
@@ -14,6 +15,23 @@ const SUMMARY_STATUSES: LeaveStatus[] = ["draft", "pending", "approved", "reject
 function shiftMonth(year: number, month: number, delta: number): { year: number; month: number } {
   const total = year * 12 + month + delta;
   return { year: Math.floor(total / 12), month: ((total % 12) + 12) % 12 };
+}
+
+async function loadAttendanceToday(supabase: SupabaseClient<Database>, userId: string) {
+  const [{ data: log }, { data: settings }] = await Promise.all([
+    supabase
+      .from("attendance_logs")
+      .select("check_in_at, check_out_at")
+      .eq("user_id", userId)
+      .eq("work_date", todayIso())
+      .maybeSingle(),
+    supabase.from("attendance_settings").select("break_hours").eq("id", 1).maybeSingle(),
+  ]);
+  return {
+    checkInAt: log?.check_in_at ?? null,
+    checkOutAt: log?.check_out_at ?? null,
+    breakHours: settings?.break_hours ?? 1,
+  };
 }
 
 async function loadPendingTeamRequests(supabase: SupabaseClient<Database>) {
@@ -46,7 +64,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
   // Approvers only review/approve their team's documents — they never file
   // their own leave anymore, so their home screen is just the approval queue.
   if (appUser.role === "approver") {
-    const { pendingTeamRequests, requesterMap, leaveTypeMap } = await loadPendingTeamRequests(supabase);
+    const [{ pendingTeamRequests, requesterMap, leaveTypeMap }, attendance] = await Promise.all([
+      loadPendingTeamRequests(supabase),
+      loadAttendanceToday(supabase, appUser.id),
+    ]);
 
     return (
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 p-4 pb-24">
@@ -54,6 +75,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
           <h1 className="text-xl font-bold tracking-tight text-foreground">สวัสดี, {appUser.email}</h1>
           <p className="text-sm text-muted-foreground">คำขอรออนุมัติของทีม</p>
         </div>
+
+        <AttendanceCard
+          checkInAt={attendance.checkInAt}
+          checkOutAt={attendance.checkOutAt}
+          breakHours={attendance.breakHours}
+        />
 
         <PendingTeamRequestsCard
           requests={pendingTeamRequests}
@@ -79,7 +106,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
 
   const isAdmin = appUser.role === "admin";
 
-  const [{ data: ownRequests }, { data: monthRequests }, { data: leaveTypes }, { data: holidayRows }, pendingTeam] =
+  const [{ data: ownRequests }, { data: monthRequests }, { data: leaveTypes }, { data: holidayRows }, pendingTeam, attendance] =
     await Promise.all([
       supabase.from("leave_requests").select("status").eq("user_id", appUser.id),
       // Only confirmed (approved) leave shows as "on leave" in the calendar —
@@ -97,6 +124,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
       isAdmin
         ? loadPendingTeamRequests(supabase)
         : Promise.resolve({ pendingTeamRequests: [], requesterMap: new Map(), leaveTypeMap: new Map() }),
+      loadAttendanceToday(supabase, appUser.id),
     ]);
 
   const leaveTypeMapFull = new Map((leaveTypes ?? []).map((lt) => [lt.id, lt]));
@@ -136,6 +164,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
         <h1 className="text-xl font-bold tracking-tight text-foreground">สวัสดี, {appUser.email}</h1>
         <p className="text-sm text-muted-foreground">สรุปคำขอลาของฉัน</p>
       </div>
+
+      <AttendanceCard
+        checkInAt={attendance.checkInAt}
+        checkOutAt={attendance.checkOutAt}
+        breakHours={attendance.breakHours}
+      />
 
       <Card>
         <CardHeader>

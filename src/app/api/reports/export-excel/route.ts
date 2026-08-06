@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import ExcelJS from "exceljs";
 import { getCurrentAppUser } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { buildReportQuery, loadReportLookups } from "@/lib/reports";
+import { buildReportQuery, loadReportLookups, loadApprovalChainsForReport } from "@/lib/reports";
 import { formatThaiDate } from "@/lib/date";
 import { STATUS_LABEL_TH, PERIOD_LABEL_TH } from "@/lib/status";
 import { rateLimitResponse } from "@/lib/rate-limit";
@@ -33,11 +33,16 @@ export async function GET(request: NextRequest) {
   }
 
   const rows = requests ?? [];
-  const [{ userMap, leaveTypeMap, teamMap }, { data: attendanceSettings }] = await Promise.all([
+  const [{ userMap, leaveTypeMap, teamMap }, { data: attendanceSettings }, approvalChains] = await Promise.all([
     loadReportLookups(supabase, rows),
     supabase.from("attendance_settings").select("standard_work_hours").eq("id", 1).maybeSingle(),
+    loadApprovalChainsForReport(supabase, rows),
   ]);
   const hoursPerDay = attendanceSettings?.standard_work_hours ?? 8;
+  // Sized to whatever team in this report has the deepest chain — a
+  // single-approver team's rows just leave the later "ลำดับถัดไป" columns
+  // blank instead of every row needing the same fixed column count.
+  const maxLevels = Math.max(0, ...Array.from(approvalChains.values()).map((levels) => levels.length));
 
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "ระบบบันทึกการลา";
@@ -55,7 +60,11 @@ export async function GET(request: NextRequest) {
     { header: "จำนวนวัน", key: "total_days", width: 10 },
     { header: "จำนวนชั่วโมง", key: "total_hours", width: 12 },
     { header: "สถานะ", key: "status", width: 12 },
-    { header: "ผู้อนุมัติ", key: "approver", width: 22 },
+    ...Array.from({ length: maxLevels }, (_, i) => ({
+      header: `ผู้อนุมัติลำดับที่ ${i + 1}`,
+      key: `approver_level_${i + 1}`,
+      width: 24,
+    })),
     { header: "หมายเหตุ", key: "note", width: 24 },
   ];
 
@@ -64,6 +73,12 @@ export async function GET(request: NextRequest) {
   sheet.getRow(1).border = { bottom: { style: "thin", color: { argb: "FFD1D5DB" } } };
 
   for (const r of rows) {
+    const levels = approvalChains.get(r.id) ?? [];
+    const approverColumns: Record<string, string> = {};
+    for (let i = 0; i < maxLevels; i++) {
+      approverColumns[`approver_level_${i + 1}`] = levels[i] ? levels[i].emails.join(", ") : "";
+    }
+
     sheet.addRow({
       request_no: r.request_no ?? "",
       employee: userMap.get(r.user_id) ?? "",
@@ -76,7 +91,7 @@ export async function GET(request: NextRequest) {
       total_days: r.total_days ?? "",
       total_hours: r.total_days != null ? r.total_days * hoursPerDay : "",
       status: STATUS_LABEL_TH[r.status],
-      approver: r.approver_id ? userMap.get(r.approver_id) ?? "" : "",
+      ...approverColumns,
       note: r.approver_note ?? "",
     });
   }

@@ -8,6 +8,11 @@ const SECTIONS = [
   { href: "/settings/approver-mappings", title: "สายอนุมัติ (override)", description: "กำหนดผู้อนุมัติพิเศษเฉพาะราย" },
   { href: "/settings/leave-types", title: "ประเภทการลา", description: "จัดการประเภทการลาที่เลือกได้" },
   { href: "/settings/holidays", title: "วันหยุด", description: "จัดการวันหยุดนักขัตฤกษ์และวันหยุดบริษัท" },
+  {
+    href: "/settings/attendance",
+    title: "เข้า-ออกงาน",
+    description: "ตั้งเวลาแจ้งเตือนเช็คอิน/เช็คเอาท์ และชั่วโมงทำงาน",
+  },
 ];
 
 export default async function SettingsIndexPage() {

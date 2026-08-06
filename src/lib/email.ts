@@ -158,3 +158,31 @@ export async function notifyLeaveDecision(params: {
     html: emailShell(`คำขอลาของคุณ: ${decisionLabel}`, body),
   });
 }
+
+export async function notifyCheckInReminder(toEmail: string): Promise<void> {
+  const transporter = getMailTransporter();
+  if (!transporter) return;
+
+  const body = `<p>สวัสดีตอนเช้าค่ะ/ครับ อย่าลืมกด <strong>เช็คอิน</strong> เข้าระบบน้าา</p>`;
+
+  await transporter.sendMail({
+    from: FROM,
+    to: toEmail,
+    subject: "อย่าลืมเช็คอินเข้างานน้าา",
+    html: emailShell("เตือนเช็คอินเข้างาน", body),
+  });
+}
+
+export async function notifyCheckOutReminder(toEmail: string): Promise<void> {
+  const transporter = getMailTransporter();
+  if (!transporter) return;
+
+  const body = `<p>เลิกงานแล้ว อย่าลืมกด <strong>เช็คเอาท์</strong> น้า</p>`;
+
+  await transporter.sendMail({
+    from: FROM,
+    to: toEmail,
+    subject: "เลิกงานแล้ว อย่าลืมเช็คเอาท์น้า",
+    html: emailShell("เตือนเช็คเอาท์ออกงาน", body),
+  });
+}

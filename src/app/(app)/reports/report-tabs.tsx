@@ -19,7 +19,7 @@ export function ReportTabs({ current }: { current: ReportTab }) {
       onChange={(tab) => router.push(`/reports?tab=${tab}`)}
       options={[
         { value: "leave", label: "รายงานการลา" },
-        { value: "attendance", label: "เช็คอิน-เช็คเอาท์" },
+        { value: "attendance", label: "รายงานเช็คอิน-เช็คเอาท์" },
       ]}
     />
   );

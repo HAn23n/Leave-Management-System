@@ -165,20 +165,32 @@ export default async function LeaveRequestDetailPage({ params }: { params: { req
         </CardHeader>
         <CardContent>
           <ol className="flex flex-col gap-3 border-l border-border pl-4">
-            {(logs ?? []).map((log) => (
-              <li key={log.id} className="relative text-sm">
-                <span className="absolute -left-[21px] top-1 h-2 w-2 rounded-full bg-primary" />
-                <p className="font-medium text-foreground">
-                  {log.from_status ? `${STATUS_LABEL_TH[log.from_status]} → ` : ""}
-                  {STATUS_LABEL_TH[log.to_status]}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {log.actor_id ? actorMap.get(log.actor_id) ?? "-" : "ระบบ"} ·{" "}
-                  {formatThaiDate(log.created_at.slice(0, 10), "long")}
-                </p>
-                {log.note && <p className="mt-1 text-xs text-muted-foreground">หมายเหตุ: {log.note}</p>}
-              </li>
-            ))}
+            {(logs ?? []).map((log) => {
+              // Intermediate multi-level approvals log as "pending -> pending"
+              // (the request's overall status genuinely doesn't change until
+              // the last level) — showing that as an arrow reads like nothing
+              // happened. Lead with the note ("อนุมัติลำดับที่ N") instead,
+              // which is the actual event; a real status change still shows
+              // the normal "A -> B" line.
+              const statusChanged = log.from_status !== log.to_status;
+              return (
+                <li key={log.id} className="relative text-sm">
+                  <span className="absolute -left-[21px] top-1 h-2 w-2 rounded-full bg-primary" />
+                  <p className="font-medium text-foreground">
+                    {statusChanged
+                      ? `${log.from_status ? `${STATUS_LABEL_TH[log.from_status]} → ` : ""}${STATUS_LABEL_TH[log.to_status]}`
+                      : (log.note ?? STATUS_LABEL_TH[log.to_status])}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {log.actor_id ? actorMap.get(log.actor_id) ?? "-" : "ระบบ"} ·{" "}
+                    {formatThaiDate(log.created_at.slice(0, 10), "long")}
+                  </p>
+                  {statusChanged && log.note && (
+                    <p className="mt-1 text-xs text-muted-foreground">หมายเหตุ: {log.note}</p>
+                  )}
+                </li>
+              );
+            })}
           </ol>
         </CardContent>
       </Card>

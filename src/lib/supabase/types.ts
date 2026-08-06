@@ -59,7 +59,13 @@ export interface ApproverMapping {
 export interface PendingUserRole {
   email: string;
   role: UserRole;
-  team_id: string | null;
+  created_at: string;
+}
+
+export interface PendingUserTeam {
+  id: string;
+  email: string;
+  team_id: string;
   created_at: string;
 }
 
@@ -174,6 +180,7 @@ export interface Database {
       user_team_logs: Table<UserTeamLog>;
       approver_mappings: Table<ApproverMapping>;
       pending_user_roles: Table<PendingUserRole>;
+      pending_user_teams: Table<PendingUserTeam>;
       pending_team_leads: Table<PendingTeamLead>;
       leave_types: Table<LeaveType>;
       holidays: Table<Holiday>;

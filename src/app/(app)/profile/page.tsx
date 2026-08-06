@@ -28,6 +28,12 @@ export default async function ProfilePage() {
             <span className="text-muted-foreground">อีเมล</span>
             <span className="font-medium">{appUser.email}</span>
           </div>
+          {appUser.nickname && (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">ชื่อเล่น</span>
+              <span className="font-medium">{appUser.nickname}</span>
+            </div>
+          )}
           <div className="flex justify-between">
             <span className="text-muted-foreground">สิทธิ์การใช้งาน</span>
             <span className="font-medium">{roleLabel}</span>

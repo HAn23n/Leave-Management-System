@@ -10,6 +10,22 @@ import { sendOrQueueEmail } from "@/lib/email-outbox";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
+ * Whether the viewing approver has already acted at their own level of this
+ * request's chain — the request's overall status is still "pending" (other
+ * levels remain), but from this approver's point of view it isn't waiting on
+ * them anymore. Shared so the dashboard card, search list, and detail page
+ * all swap the plain "รออนุมัติ" badge for "อนุมัติแล้ว รอลำดับถัดไป" the
+ * same way instead of drifting between three separately-written checks.
+ */
+export function isAlreadyActedByApprover(
+  status: LeaveStatus,
+  currentLevel: number,
+  ownApprovalOrder: number | null | undefined
+): boolean {
+  return status === "pending" && ownApprovalOrder != null && currentLevel > ownApprovalOrder;
+}
+
+/**
  * Looks a request up by its friendly request_no (the normal URL param since
  * request_no-based routing replaced raw UUIDs), falling back to matching by
  * id so any link shared before that change keeps resolving. Branches on

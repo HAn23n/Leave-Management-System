@@ -4,12 +4,12 @@ import { requireAppUser } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { formatThaiDate } from "@/lib/date";
-import { STATUS_LABEL_TH, STATUS_BADGE_VARIANT, PERIOD_LABEL_TH } from "@/lib/status";
-import { Badge } from "@/components/ui/badge";
+import { STATUS_LABEL_TH, PERIOD_LABEL_TH } from "@/lib/status";
+import { ApprovalStatusBadge } from "@/components/approval-status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { LeaveRequestActions } from "./leave-request-actions";
-import { findLeaveRequestByParam } from "@/lib/leave-requests";
+import { findLeaveRequestByParam, isAlreadyActedByApprover } from "@/lib/leave-requests";
 import { resolveApprovalChain } from "@/lib/approval-chain";
 import { displayName } from "@/lib/users";
 
@@ -107,17 +107,26 @@ export default async function LeaveRequestDetailPage({ params }: { params: { req
       ? chain.levels.some((l) => l.approver.id === appUser.id)
       : pendingLevelApprover?.id === appUser.id);
   const totalLevels = chain?.type === "chain" ? chain.levels.length : 1;
+  // Same "already acted at my own level" check the dashboard/search list use
+  // — keeps the top badge consistent with those instead of always reading
+  // the generic "รออนุมัติ" for an approver who has, from their own point of
+  // view, already finished their part.
+  const ownLevel = chain?.type === "chain" ? chain.levels.find((l) => l.approver.id === appUser.id)?.level : undefined;
+  const alreadyActedByMe = isAlreadyActedByApprover(leaveRequest.status, leaveRequest.current_level, ownLevel);
 
   return (
     <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-4 p-4 pb-28">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold text-foreground">รายละเอียดคำขอลา</h1>
-        <Badge variant={STATUS_BADGE_VARIANT[leaveRequest.status]}>
-          {STATUS_LABEL_TH[leaveRequest.status]}
-          {leaveRequest.status === "pending" && chain?.type === "chain" && totalLevels > 1 && currentLevelIndex >= 0
-            ? ` (${currentLevelIndex + 1}/${totalLevels})`
-            : ""}
-        </Badge>
+        <ApprovalStatusBadge
+          status={leaveRequest.status}
+          alreadyActedByMe={alreadyActedByMe}
+          levelProgress={
+            chain?.type === "chain" && totalLevels > 1 && currentLevelIndex >= 0
+              ? `${currentLevelIndex + 1}/${totalLevels}`
+              : undefined
+          }
+        />
       </div>
 
       <Card>

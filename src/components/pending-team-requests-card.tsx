@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { formatThaiDate } from "@/lib/date";
-import { STATUS_LABEL_TH, STATUS_BADGE_VARIANT } from "@/lib/status";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { ApprovalStatusBadge } from "@/components/approval-status-badge";
 
 export interface PendingTeamRequestRow {
   id: string;
@@ -18,10 +17,12 @@ export function PendingTeamRequestsCard({
   requests,
   requesterMap,
   leaveTypeMap,
+  alreadyActedByMe,
 }: {
   requests: PendingTeamRequestRow[];
   requesterMap: Map<string, string>;
   leaveTypeMap: Map<string, string>;
+  alreadyActedByMe: Map<string, boolean>;
 }) {
   return (
     <Card>
@@ -46,7 +47,7 @@ export function PendingTeamRequestsCard({
                 {formatThaiDate(r.start_date)} - {formatThaiDate(r.end_date)} ({r.total_days ?? "-"} วัน)
               </p>
             </div>
-            <Badge variant={STATUS_BADGE_VARIANT.pending}>{STATUS_LABEL_TH.pending}</Badge>
+            <ApprovalStatusBadge status="pending" alreadyActedByMe={alreadyActedByMe.get(r.id)} />
           </Link>
         ))}
       </CardContent>

@@ -3,8 +3,8 @@ import { requireAppUser } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { formatThaiDate } from "@/lib/date";
-import { STATUS_LABEL_TH, STATUS_BADGE_VARIANT } from "@/lib/status";
-import { Badge } from "@/components/ui/badge";
+import { STATUS_LABEL_TH } from "@/lib/status";
+import { ApprovalStatusBadge } from "@/components/approval-status-badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -12,6 +12,7 @@ import { DateRangeFields } from "@/components/date-range-fields";
 import { Search } from "lucide-react";
 import type { LeaveStatus } from "@/lib/supabase/types";
 import { displayName } from "@/lib/users";
+import { isAlreadyActedByApprover } from "@/lib/leave-requests";
 
 interface SearchParams {
   status?: string;
@@ -204,7 +205,7 @@ export default async function LeaveRequestsSearchPage({
 
         {(requests ?? []).map((r) => {
           const ownOrder = ownApprovalOrderByTeam.get(r.team_id);
-          const alreadyActedByMe = r.status === "pending" && ownOrder != null && r.current_level > ownOrder;
+          const alreadyActedByMe = isAlreadyActedByApprover(r.status, r.current_level, ownOrder);
           return (
             <Link
               key={r.id}
@@ -215,11 +216,7 @@ export default async function LeaveRequestsSearchPage({
                 <span className="text-sm font-medium text-foreground">
                   {leaveTypeMap.get(r.leave_type_id)?.name ?? "-"}
                 </span>
-                {alreadyActedByMe ? (
-                  <Badge variant="secondary">อนุมัติแล้ว รอลำดับถัดไป</Badge>
-                ) : (
-                  <Badge variant={STATUS_BADGE_VARIANT[r.status]}>{STATUS_LABEL_TH[r.status]}</Badge>
-                )}
+                <ApprovalStatusBadge status={r.status} alreadyActedByMe={alreadyActedByMe} />
               </div>
               <p className="text-sm text-muted-foreground">
                 {formatThaiDate(r.start_date)} - {formatThaiDate(r.end_date)} ({r.total_days ?? "-"} วัน)

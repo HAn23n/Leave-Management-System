@@ -6,6 +6,7 @@ import type { Database } from "@/lib/supabase/types";
 export interface ApproverContact {
   id: string;
   email: string;
+  nickname: string | null;
 }
 
 export interface ApprovalLevel {
@@ -45,7 +46,7 @@ export async function resolveApprovalChain(params: { userId: string; teamId: str
   if (overrides && overrides.length > 0) {
     const { data: users } = await admin
       .from("users")
-      .select("id, email")
+      .select("id, email, nickname")
       .in(
         "id",
         overrides.map((o) => o.approver_id)
@@ -64,7 +65,7 @@ export async function resolveApprovalChain(params: { userId: string; teamId: str
 
   const { data: users } = await admin
     .from("users")
-    .select("id, email")
+    .select("id, email, nickname")
     .in(
       "id",
       leads.map((l) => l.user_id)

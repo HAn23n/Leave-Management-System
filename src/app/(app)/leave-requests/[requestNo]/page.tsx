@@ -23,7 +23,7 @@ export default async function LeaveRequestDetailPage({ params }: { params: { req
     supabase.from("leave_types").select("name").eq("id", leaveRequest.leave_type_id).maybeSingle(),
     supabase.from("users").select("email, nickname").eq("id", leaveRequest.user_id).maybeSingle(),
     leaveRequest.approver_id
-      ? supabase.from("users").select("email").eq("id", leaveRequest.approver_id).maybeSingle()
+      ? supabase.from("users").select("email, nickname").eq("id", leaveRequest.approver_id).maybeSingle()
       : Promise.resolve({ data: null }),
     supabase
       .from("leave_request_logs")
@@ -35,9 +35,9 @@ export default async function LeaveRequestDetailPage({ params }: { params: { req
   const actorIds = Array.from(new Set((logs ?? []).map((l) => l.actor_id).filter(Boolean))) as string[];
   const { data: actors } =
     actorIds.length > 0
-      ? await supabase.from("users").select("id, email").in("id", actorIds)
-      : { data: [] as { id: string; email: string }[] };
-  const actorMap = new Map((actors ?? []).map((a) => [a.id, a.email]));
+      ? await supabase.from("users").select("id, email, nickname").in("id", actorIds)
+      : { data: [] as { id: string; email: string; nickname: string | null }[] };
+  const actorMap = new Map((actors ?? []).map((a) => [a.id, a.nickname || a.email]));
 
   const isOwner = leaveRequest.user_id === appUser.id;
 
@@ -121,12 +121,12 @@ export default async function LeaveRequestDetailPage({ params }: { params: { req
           />
           <Row label="จำนวนวันลา" value={leaveRequest.total_days != null ? `${leaveRequest.total_days} วัน` : "-"} />
           <Row label="เหตุผล" value={leaveRequest.reason || "-"} />
-          {approver && <Row label="ผู้อนุมัติล่าสุด" value={approver.email} />}
+          {approver && <Row label="ผู้อนุมัติล่าสุด" value={approver.nickname || approver.email} />}
           {leaveRequest.status === "pending" && chain?.type === "chain" && totalLevels > 1 && currentLevelIndex >= 0 && (
             <Row label="ลำดับอนุมัติ" value={`${currentLevelIndex + 1} / ${totalLevels}`} />
           )}
           {leaveRequest.status === "pending" && pendingLevelApprover && (
-            <Row label="รอการอนุมัติจาก" value={pendingLevelApprover.email} />
+            <Row label="รอการอนุมัติจาก" value={pendingLevelApprover.nickname || pendingLevelApprover.email} />
           )}
           {leaveRequest.approver_note && <Row label="หมายเหตุ" value={leaveRequest.approver_note} />}
         </CardContent>

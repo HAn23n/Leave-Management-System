@@ -19,11 +19,6 @@ export async function updateUserRole(formData: FormData) {
   const { data: user } = await supabase.from("users").select("role").eq("id", id).maybeSingle();
   await supabase.from("users").update({ role: role as UserRole }).eq("id", id);
 
-  // Demoting away from approver leaves any team_leads rows contradicting
-  // the new role (trg_team_leads_sync_role reacts to team_leads changes,
-  // not to a direct role edit, so this direction still needs handling
-  // here). Promoting *to* approver deliberately does NOT auto-add them to
-  // any team — use the "ทีมที่ดูแลอนุมัติ" checkboxes below for that.
   if (user?.role === "approver" && role !== "approver") {
     await supabase.from("team_leads").delete().eq("user_id", id);
   }
@@ -107,5 +102,51 @@ export async function setUserActive(formData: FormData) {
 
   const supabase = createServerSupabaseClient();
   await supabase.from("users").update({ is_active: isActive }).eq("id", id);
+  revalidatePath("/settings/users");
+}
+
+const PROVISIONABLE_ROLES: UserRole[] = ["admin", "user"];
+
+/**
+ * Grants an email access to the app ahead of their first Google login.
+ * First login is now gated on being pre-provisioned (see
+ * src/app/auth/callback/route.ts) — anyone not added here (or as a team
+ * lead via Settings → ทีม) can sign in with Google but is turned away, so
+ * this is the only way a plain (non-approver) account gets in.
+ */
+export async function preProvisionUser(formData: FormData) {
+  await requireAdmin();
+  const email = String(formData.get("email") ?? "")
+    .trim()
+    .toLowerCase();
+  const role = String(formData.get("role") ?? "user");
+  const rawTeamId = String(formData.get("team_id") || "");
+  const teamId = rawTeamId === "none" ? null : rawTeamId || null;
+  if (!email || !PROVISIONABLE_ROLES.includes(role as UserRole)) return;
+
+  const supabase = createServerSupabaseClient();
+  const { data: existingUser } = await supabase.from("users").select("id").eq("email", email).maybeSingle();
+
+  if (existingUser) {
+    // Already signed in before — apply directly instead of queueing.
+    await supabase
+      .from("users")
+      .update({ role: role as UserRole, ...(teamId ? { team_id: teamId } : {}) })
+      .eq("id", existingUser.id);
+  } else {
+    await supabase
+      .from("pending_user_roles")
+      .upsert({ email, role: role as UserRole, team_id: teamId }, { onConflict: "email" });
+  }
+
+  revalidatePath("/settings/users");
+}
+
+export async function removePendingUser(formData: FormData) {
+  await requireAdmin();
+  const email = String(formData.get("email"));
+
+  const supabase = createServerSupabaseClient();
+  await supabase.from("pending_user_roles").delete().eq("email", email);
   revalidatePath("/settings/users");
 }

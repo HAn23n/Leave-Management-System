@@ -72,9 +72,11 @@ export function LeaveRequestActions({
   // Sequential approval chain: hide the buttons if it isn't this approver's
   // turn yet (an earlier level hasn't signed off) — acting would just fail.
   const canApproverAct = isApproverInScope && !isOwner && status === "pending" && isCurrentApprover;
-  // The cancel API also allows approver/admin to cancel an already-approved
-  // or returned request (see /api/leave-requests/[id]/cancel) — mirror both here.
-  const canApproverCancel = isApproverInScope && (status === "approved" || status === "returned");
+  // Only admin may withdraw a request that's already been decided
+  // (approved/returned) — an approver's authority stops at approve/reject/
+  // return on their own turn, cancelling someone else's finished document
+  // isn't theirs to do. Mirror this in /api/leave-requests/[id]/cancel.
+  const canApproverCancel = currentUserRole === "admin" && (status === "approved" || status === "returned");
 
   if (!canOwnerSubmit && !canOwnerCancel && !canApproverAct && !canApproverCancel) {
     return null;

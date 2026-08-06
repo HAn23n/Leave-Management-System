@@ -2,8 +2,17 @@ import { requireAdmin } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { updateUserRole, updateUserTeam, updateApprovedTeams, selectAllApprovedTeams, setUserActive } from "./actions";
+import {
+  updateUserRole,
+  updateUserTeam,
+  updateApprovedTeams,
+  selectAllApprovedTeams,
+  setUserActive,
+  preProvisionUser,
+  removePendingUser,
+} from "./actions";
 
 const ROLE_LABEL = { admin: "ผู้ดูแลระบบ", approver: "หัวหน้าทีม", user: "developer" } as const;
 
@@ -11,10 +20,11 @@ export default async function UsersSettingsPage() {
   await requireAdmin();
   const supabase = createServerSupabaseClient();
 
-  const [{ data: users }, { data: teams }, { data: teamLeads }] = await Promise.all([
+  const [{ data: users }, { data: teams }, { data: teamLeads }, { data: pendingUsers }] = await Promise.all([
     supabase.from("users").select("*").order("email"),
     supabase.from("teams").select("id, name").eq("is_active", true).order("name"),
     supabase.from("team_leads").select("user_id, team_id"),
+    supabase.from("pending_user_roles").select("*").order("created_at"),
   ]);
 
   const teamMap = new Map((teams ?? []).map((t) => [t.id, t.name]));
@@ -22,6 +32,61 @@ export default async function UsersSettingsPage() {
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 p-4 pb-24">
       <h1 className="text-lg font-semibold text-foreground">ผู้ใช้งานและสิทธิ์</h1>
+
+      <div className="rounded-lg border border-border bg-white p-4">
+        <p className="text-sm font-medium text-foreground">เพิ่มสิทธิ์เข้าใช้งานล่วงหน้า</p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          ต้องเพิ่มอีเมลไว้ที่นี่ก่อน คนนั้นถึงจะเข้าสู่ระบบด้วย Google ได้ (หรือกำหนดเป็นหัวหน้าทีมได้ที่หน้า
+          &quot;ทีม&quot; แทน)
+        </p>
+        <form action={preProvisionUser} className="mt-3 flex flex-wrap items-center gap-2">
+          <Input name="email" type="email" placeholder="อีเมล Gmail" required className="h-9 w-56" />
+          <Select name="role" defaultValue="user">
+            <SelectTrigger className="h-9 w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="user">developer</SelectItem>
+              <SelectItem value="admin">ผู้ดูแลระบบ</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select name="team_id" defaultValue="none">
+            <SelectTrigger className="h-9 w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">ไม่มีทีม</SelectItem>
+              {(teams ?? []).map((t) => (
+                <SelectItem key={t.id} value={t.id}>
+                  {t.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button type="submit" size="sm">
+            เพิ่มสิทธิ์
+          </Button>
+        </form>
+
+        {(pendingUsers ?? []).length > 0 && (
+          <div className="mt-3 flex flex-col gap-1.5 border-t border-border pt-3">
+            {(pendingUsers ?? []).map((p) => (
+              <div key={p.email} className="flex items-center justify-between text-sm text-muted-foreground">
+                <span>
+                  {p.email} · {ROLE_LABEL[p.role]}
+                  {p.team_id && ` · ${teamMap.get(p.team_id) ?? "-"}`} <Badge variant="outline">รอเข้าระบบครั้งแรก</Badge>
+                </span>
+                <form action={removePendingUser}>
+                  <input type="hidden" name="email" value={p.email} />
+                  <Button type="submit" size="sm" variant="ghost">
+                    ยกเลิก
+                  </Button>
+                </form>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className="flex flex-col gap-3">
         {(users ?? []).map((u) => {
@@ -94,9 +159,6 @@ export default async function UsersSettingsPage() {
               )}
 
               <div className="mt-3 border-t border-border pt-3">
-                <p className="text-xs font-medium text-muted-foreground">
-                  ทีมที่ดูแลอนุมัติ (เลือกได้หลายทีม — เลือกอย่างน้อย 1 ทีมจะปรับสิทธิ์เป็นหัวหน้าทีมอัตโนมัติ)
-                </p>
                 <form action={updateApprovedTeams} className="mt-2 flex flex-col gap-2">
                   <input type="hidden" name="id" value={u.id} />
                   <div className="flex flex-wrap gap-3">

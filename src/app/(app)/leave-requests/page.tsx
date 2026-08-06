@@ -54,18 +54,28 @@ export default async function LeaveRequestsSearchPage({
     query = query.lte("start_date", searchParams.to);
   }
 
-  const [{ data: requests }, { data: leaveTypes }, { data: users }, { data: holidayRows }] = await Promise.all([
-    query,
-    supabase.from("leave_types").select("id, name, color"),
-    appUser.role === "user"
-      ? Promise.resolve({ data: null })
-      : supabase.from("users").select("id, email"),
-    supabase.from("holidays").select("holiday_date, name"),
-  ]);
+  const [{ data: requests }, { data: leaveTypes }, { data: users }, { data: holidayRows }, { data: ownLeadRows }] =
+    await Promise.all([
+      query,
+      supabase.from("leave_types").select("id, name, color"),
+      appUser.role === "user"
+        ? Promise.resolve({ data: null })
+        : supabase.from("users").select("id, email"),
+      supabase.from("holidays").select("holiday_date, name"),
+      appUser.role === "approver"
+        ? supabase.from("team_leads").select("team_id, approval_order").eq("user_id", appUser.id)
+        : Promise.resolve({ data: null }),
+    ]);
 
   const leaveTypeMap = new Map((leaveTypes ?? []).map((lt) => [lt.id, lt]));
   const userMap = new Map((users ?? []).map((u) => [u.id, u.email]));
   const holidayMap = new Map((holidayRows ?? []).map((h) => [h.holiday_date, h.name]));
+  // A pending request whose current_level has already moved past this
+  // approver's own chain position means they already acted (approved) on
+  // it — the row's real status is still "pending" overall (waiting on the
+  // next level), but showing the plain "รออนุมัติ" badge reads as "it's on
+  // you", which is misleading once it's already left their hands.
+  const ownApprovalOrderByTeam = new Map((ownLeadRows ?? []).map((l) => [l.team_id, l.approval_order]));
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 p-4 pb-24">
@@ -132,27 +142,35 @@ export default async function LeaveRequestsSearchPage({
           <p className="py-8 text-center text-sm text-muted-foreground">ไม่พบข้อมูล</p>
         )}
 
-        {(requests ?? []).map((r) => (
-          <Link
-            key={r.id}
-            href={`/leave-requests/${r.request_no ?? r.id}`}
-            className="flex flex-col gap-1 rounded-2xl border border-border bg-white p-4 shadow-sm shadow-black/[0.02] transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md"
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-foreground">
-                {leaveTypeMap.get(r.leave_type_id)?.name ?? "-"}
-              </span>
-              <Badge variant={STATUS_BADGE_VARIANT[r.status]}>{STATUS_LABEL_TH[r.status]}</Badge>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              {formatThaiDate(r.start_date)} - {formatThaiDate(r.end_date)} ({r.total_days ?? "-"} วัน)
-            </p>
-            {appUser.role !== "user" && (
-              <p className="text-xs text-muted-foreground">โดย {userMap.get(r.user_id) ?? "-"}</p>
-            )}
-            {r.request_no && <p className="text-xs text-muted-foreground">เลขที่ {r.request_no}</p>}
-          </Link>
-        ))}
+        {(requests ?? []).map((r) => {
+          const ownOrder = ownApprovalOrderByTeam.get(r.team_id);
+          const alreadyActedByMe = r.status === "pending" && ownOrder != null && r.current_level > ownOrder;
+          return (
+            <Link
+              key={r.id}
+              href={`/leave-requests/${r.request_no ?? r.id}`}
+              className="flex flex-col gap-1 rounded-2xl border border-border bg-white p-4 shadow-sm shadow-black/[0.02] transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-foreground">
+                  {leaveTypeMap.get(r.leave_type_id)?.name ?? "-"}
+                </span>
+                {alreadyActedByMe ? (
+                  <Badge variant="secondary">อนุมัติแล้ว รอลำดับถัดไป</Badge>
+                ) : (
+                  <Badge variant={STATUS_BADGE_VARIANT[r.status]}>{STATUS_LABEL_TH[r.status]}</Badge>
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground">
+                {formatThaiDate(r.start_date)} - {formatThaiDate(r.end_date)} ({r.total_days ?? "-"} วัน)
+              </p>
+              {appUser.role !== "user" && (
+                <p className="text-xs text-muted-foreground">โดย {userMap.get(r.user_id) ?? "-"}</p>
+              )}
+              {r.request_no && <p className="text-xs text-muted-foreground">เลขที่ {r.request_no}</p>}
+            </Link>
+          );
+        })}
       </div>
     </main>
   );

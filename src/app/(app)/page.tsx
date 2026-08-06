@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { requireAppUser } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { nowInBangkok, todayIso } from "@/lib/date";
 import { STATUS_LABEL_TH, STATUS_ACCENT_CLASS } from "@/lib/status";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +10,8 @@ import { LeaveCalendarMonth, type CalendarLeaveDay } from "@/components/leave-ca
 import { PendingTeamRequestsCard } from "@/components/pending-team-requests-card";
 import { AttendanceCard } from "@/components/attendance-card";
 import type { Database, LeaveStatus } from "@/lib/supabase/types";
+import { displayName } from "@/lib/users";
+import { isAlreadyActedByApprover } from "@/lib/leave-requests";
 
 const SUMMARY_STATUSES: LeaveStatus[] = ["draft", "pending", "approved", "rejected", "returned"];
 
@@ -34,27 +37,40 @@ async function loadAttendanceToday(supabase: SupabaseClient<Database>, userId: s
   };
 }
 
-async function loadPendingTeamRequests(supabase: SupabaseClient<Database>) {
+async function loadPendingTeamRequests(supabase: SupabaseClient<Database>, viewerId: string) {
   const { data: pendingTeamRequests } = await supabase
     .from("leave_requests")
-    .select("id, request_no, user_id, leave_type_id, start_date, end_date, total_days")
+    .select("id, request_no, user_id, leave_type_id, team_id, current_level, start_date, end_date, total_days, status")
     .eq("status", "pending")
     .order("submitted_at", { ascending: true });
 
   let requesterMap = new Map<string, string>();
   let leaveTypeMap = new Map<string, string>();
+  const alreadyActedByMe = new Map<string, boolean>();
   if (pendingTeamRequests && pendingTeamRequests.length > 0) {
     const userIds = Array.from(new Set(pendingTeamRequests.map((r) => r.user_id)));
     const leaveTypeIds = Array.from(new Set(pendingTeamRequests.map((r) => r.leave_type_id)));
-    const [{ data: users }, { data: pendingLeaveTypes }] = await Promise.all([
-      supabase.from("users").select("id, email").in("id", userIds),
+    // Admin client, scoped to just the requesters in this already-RLS-filtered
+    // result set — see the same fix on the request detail/search pages: a
+    // requester's *current* team membership shouldn't be able to blank out
+    // their name on a request this viewer is already allowed to see.
+    const [{ data: users }, { data: pendingLeaveTypes }, { data: ownLeadRows }] = await Promise.all([
+      createAdminSupabaseClient().from("users").select("id, email, nickname").in("id", userIds),
       supabase.from("leave_types").select("id, name").in("id", leaveTypeIds),
+      supabase.from("team_leads").select("team_id, approval_order").eq("user_id", viewerId),
     ]);
-    requesterMap = new Map((users ?? []).map((u) => [u.id, u.email]));
+    requesterMap = new Map((users ?? []).map((u) => [u.id, displayName(u)]));
     leaveTypeMap = new Map((pendingLeaveTypes ?? []).map((lt) => [lt.id, lt.name]));
+    // Same "already acted at my own level" check as the search list — an
+    // approver leading multiple levels/teams shouldn't see a plain "รออนุมัติ"
+    // on a request that's actually just waiting on someone else now.
+    const ownApprovalOrderByTeam = new Map((ownLeadRows ?? []).map((l) => [l.team_id, l.approval_order]));
+    for (const r of pendingTeamRequests) {
+      alreadyActedByMe.set(r.id, isAlreadyActedByApprover(r.status, r.current_level, ownApprovalOrderByTeam.get(r.team_id)));
+    }
   }
 
-  return { pendingTeamRequests: pendingTeamRequests ?? [], requesterMap, leaveTypeMap };
+  return { pendingTeamRequests: pendingTeamRequests ?? [], requesterMap, leaveTypeMap, alreadyActedByMe };
 }
 
 export default async function DashboardPage({ searchParams }: { searchParams: { month?: string } }) {
@@ -64,8 +80,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
   // Approvers only review/approve their team's documents — they never file
   // their own leave anymore, so their home screen is just the approval queue.
   if (appUser.role === "approver") {
-    const [{ pendingTeamRequests, requesterMap, leaveTypeMap }, attendance] = await Promise.all([
-      loadPendingTeamRequests(supabase),
+    const [{ pendingTeamRequests, requesterMap, leaveTypeMap, alreadyActedByMe }, attendance] = await Promise.all([
+      loadPendingTeamRequests(supabase, appUser.id),
       loadAttendanceToday(supabase, appUser.id),
     ]);
 
@@ -86,6 +102,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
           requests={pendingTeamRequests}
           requesterMap={requesterMap}
           leaveTypeMap={leaveTypeMap}
+          alreadyActedByMe={alreadyActedByMe}
         />
       </main>
     );
@@ -122,8 +139,13 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
       supabase.from("leave_types").select("id, name, color"),
       supabase.from("holidays").select("holiday_date, name").gte("holiday_date", monthStart).lte("holiday_date", monthEnd),
       isAdmin
-        ? loadPendingTeamRequests(supabase)
-        : Promise.resolve({ pendingTeamRequests: [], requesterMap: new Map(), leaveTypeMap: new Map() }),
+        ? loadPendingTeamRequests(supabase, appUser.id)
+        : Promise.resolve({
+            pendingTeamRequests: [],
+            requesterMap: new Map(),
+            leaveTypeMap: new Map(),
+            alreadyActedByMe: new Map<string, boolean>(),
+          }),
       loadAttendanceToday(supabase, appUser.id),
     ]);
 
@@ -208,6 +230,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
           requests={pendingTeam.pendingTeamRequests}
           requesterMap={pendingTeam.requesterMap}
           leaveTypeMap={pendingTeam.leaveTypeMap}
+          alreadyActedByMe={pendingTeam.alreadyActedByMe}
         />
       )}
     </main>

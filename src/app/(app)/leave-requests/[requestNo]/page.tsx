@@ -2,14 +2,16 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { requireAppUser } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { formatThaiDate } from "@/lib/date";
-import { STATUS_LABEL_TH, STATUS_BADGE_VARIANT, PERIOD_LABEL_TH } from "@/lib/status";
-import { Badge } from "@/components/ui/badge";
+import { STATUS_LABEL_TH, PERIOD_LABEL_TH } from "@/lib/status";
+import { ApprovalStatusBadge } from "@/components/approval-status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { LeaveRequestActions } from "./leave-request-actions";
-import { findLeaveRequestByParam } from "@/lib/leave-requests";
+import { findLeaveRequestByParam, isAlreadyActedByApprover } from "@/lib/leave-requests";
 import { resolveApprovalChain } from "@/lib/approval-chain";
+import { displayName } from "@/lib/users";
 
 export default async function LeaveRequestDetailPage({ params }: { params: { requestNo: string } }) {
   const appUser = await requireAppUser();
@@ -19,25 +21,11 @@ export default async function LeaveRequestDetailPage({ params }: { params: { req
 
   if (!leaveRequest) notFound();
 
-  const [{ data: leaveType }, { data: requester }, { data: approver }, { data: logs }] = await Promise.all([
-    supabase.from("leave_types").select("name").eq("id", leaveRequest.leave_type_id).maybeSingle(),
-    supabase.from("users").select("email").eq("id", leaveRequest.user_id).maybeSingle(),
-    leaveRequest.approver_id
-      ? supabase.from("users").select("email").eq("id", leaveRequest.approver_id).maybeSingle()
-      : Promise.resolve({ data: null }),
-    supabase
-      .from("leave_request_logs")
-      .select("*")
-      .eq("request_id", leaveRequest.id)
-      .order("created_at", { ascending: true }),
-  ]);
-
-  const actorIds = Array.from(new Set((logs ?? []).map((l) => l.actor_id).filter(Boolean))) as string[];
-  const { data: actors } =
-    actorIds.length > 0
-      ? await supabase.from("users").select("id, email").in("id", actorIds)
-      : { data: [] as { id: string; email: string }[] };
-  const actorMap = new Map((actors ?? []).map((a) => [a.id, a.email]));
+  const { data: leaveType } = await supabase
+    .from("leave_types")
+    .select("name")
+    .eq("id", leaveRequest.leave_type_id)
+    .maybeSingle();
 
   const isOwner = leaveRequest.user_id === appUser.id;
 
@@ -70,6 +58,33 @@ export default async function LeaveRequestDetailPage({ params }: { params: { req
   const isAuthorizedToView = isOwner || appUser.role === "admin" || approverInScopeOfRequest;
   if (!isAuthorizedToView) notFound();
 
+  // Once someone is confirmed authorized to view this specific request
+  // (above), who filed/acted on it shouldn't depend on the viewer's *current*
+  // users_select visibility of those people — team membership can change
+  // after a request is filed (or drift out of sync for other reasons), which
+  // must not silently blank out "ผู้ขอลา"/"ผู้อนุมัติ" on a request someone is
+  // otherwise cleared to see. The admin client bypasses that RLS entirely,
+  // scoped by the authorization check just above.
+  const admin = createAdminSupabaseClient();
+  const [{ data: requester }, { data: approver }, { data: logs }] = await Promise.all([
+    admin.from("users").select("email, nickname").eq("id", leaveRequest.user_id).maybeSingle(),
+    leaveRequest.approver_id
+      ? admin.from("users").select("email, nickname").eq("id", leaveRequest.approver_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    supabase
+      .from("leave_request_logs")
+      .select("*")
+      .eq("request_id", leaveRequest.id)
+      .order("created_at", { ascending: true }),
+  ]);
+
+  const actorIds = Array.from(new Set((logs ?? []).map((l) => l.actor_id).filter(Boolean))) as string[];
+  const { data: actors } =
+    actorIds.length > 0
+      ? await admin.from("users").select("id, email, nickname").in("id", actorIds)
+      : { data: [] as { id: string; email: string; nickname: string | null }[] };
+  const actorMap = new Map((actors ?? []).map((a) => [a.id, displayName(a)]));
+
   const isApproverInScope = appUser.role === "approver" || appUser.role === "admin";
 
   // Sequential approval chain: only the approver assigned to the request's
@@ -92,14 +107,26 @@ export default async function LeaveRequestDetailPage({ params }: { params: { req
       ? chain.levels.some((l) => l.approver.id === appUser.id)
       : pendingLevelApprover?.id === appUser.id);
   const totalLevels = chain?.type === "chain" ? chain.levels.length : 1;
+  // Same "already acted at my own level" check the dashboard/search list use
+  // — keeps the top badge consistent with those instead of always reading
+  // the generic "รออนุมัติ" for an approver who has, from their own point of
+  // view, already finished their part.
+  const ownLevel = chain?.type === "chain" ? chain.levels.find((l) => l.approver.id === appUser.id)?.level : undefined;
+  const alreadyActedByMe = isAlreadyActedByApprover(leaveRequest.status, leaveRequest.current_level, ownLevel);
 
   return (
     <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-4 p-4 pb-28">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold text-foreground">รายละเอียดคำขอลา</h1>
-        <Badge variant={STATUS_BADGE_VARIANT[leaveRequest.status]}>
-          {STATUS_LABEL_TH[leaveRequest.status]}
-        </Badge>
+        <ApprovalStatusBadge
+          status={leaveRequest.status}
+          alreadyActedByMe={alreadyActedByMe}
+          levelProgress={
+            chain?.type === "chain" && totalLevels > 1 && currentLevelIndex >= 0
+              ? `${currentLevelIndex + 1}/${totalLevels}`
+              : undefined
+          }
+        />
       </div>
 
       <Card>
@@ -110,7 +137,7 @@ export default async function LeaveRequestDetailPage({ params }: { params: { req
           {leaveRequest.request_no && (
             <Row label="เลขที่เอกสาร" value={leaveRequest.request_no} />
           )}
-          <Row label="ผู้ขอลา" value={requester?.email ?? "-"} />
+          <Row label="ผู้ขอลา" value={displayName(requester)} />
           <Row
             label="วันที่เริ่ม"
             value={`${formatThaiDate(leaveRequest.start_date)} (${PERIOD_LABEL_TH[leaveRequest.start_period]})`}
@@ -121,12 +148,12 @@ export default async function LeaveRequestDetailPage({ params }: { params: { req
           />
           <Row label="จำนวนวันลา" value={leaveRequest.total_days != null ? `${leaveRequest.total_days} วัน` : "-"} />
           <Row label="เหตุผล" value={leaveRequest.reason || "-"} />
-          {approver && <Row label="ผู้อนุมัติล่าสุด" value={approver.email} />}
+          {approver && <Row label="ผู้อนุมัติล่าสุด" value={displayName(approver)} />}
           {leaveRequest.status === "pending" && chain?.type === "chain" && totalLevels > 1 && currentLevelIndex >= 0 && (
             <Row label="ลำดับอนุมัติ" value={`${currentLevelIndex + 1} / ${totalLevels}`} />
           )}
           {leaveRequest.status === "pending" && pendingLevelApprover && (
-            <Row label="รอการอนุมัติจาก" value={pendingLevelApprover.email} />
+            <Row label="รอการอนุมัติจาก" value={displayName(pendingLevelApprover)} />
           )}
           {leaveRequest.approver_note && <Row label="หมายเหตุ" value={leaveRequest.approver_note} />}
         </CardContent>
@@ -138,20 +165,32 @@ export default async function LeaveRequestDetailPage({ params }: { params: { req
         </CardHeader>
         <CardContent>
           <ol className="flex flex-col gap-3 border-l border-border pl-4">
-            {(logs ?? []).map((log) => (
-              <li key={log.id} className="relative text-sm">
-                <span className="absolute -left-[21px] top-1 h-2 w-2 rounded-full bg-primary" />
-                <p className="font-medium text-foreground">
-                  {log.from_status ? `${STATUS_LABEL_TH[log.from_status]} → ` : ""}
-                  {STATUS_LABEL_TH[log.to_status]}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {log.actor_id ? actorMap.get(log.actor_id) ?? "-" : "ระบบ"} ·{" "}
-                  {formatThaiDate(log.created_at.slice(0, 10), "long")}
-                </p>
-                {log.note && <p className="mt-1 text-xs text-muted-foreground">หมายเหตุ: {log.note}</p>}
-              </li>
-            ))}
+            {(logs ?? []).map((log) => {
+              // Intermediate multi-level approvals log as "pending -> pending"
+              // (the request's overall status genuinely doesn't change until
+              // the last level) — showing that as an arrow reads like nothing
+              // happened. Lead with the note ("อนุมัติลำดับที่ N") instead,
+              // which is the actual event; a real status change still shows
+              // the normal "A -> B" line.
+              const statusChanged = log.from_status !== log.to_status;
+              return (
+                <li key={log.id} className="relative text-sm">
+                  <span className="absolute -left-[21px] top-1 h-2 w-2 rounded-full bg-primary" />
+                  <p className="font-medium text-foreground">
+                    {statusChanged
+                      ? `${log.from_status ? `${STATUS_LABEL_TH[log.from_status]} → ` : ""}${STATUS_LABEL_TH[log.to_status]}`
+                      : (log.note ?? STATUS_LABEL_TH[log.to_status])}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {log.actor_id ? actorMap.get(log.actor_id) ?? "-" : "ระบบ"} ·{" "}
+                    {formatThaiDate(log.created_at.slice(0, 10), "long")}
+                  </p>
+                  {statusChanged && log.note && (
+                    <p className="mt-1 text-xs text-muted-foreground">หมายเหตุ: {log.note}</p>
+                  )}
+                </li>
+              );
+            })}
           </ol>
         </CardContent>
       </Card>

@@ -1,19 +1,23 @@
 import Link from "next/link";
 import { requireAppUser } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { formatThaiDate } from "@/lib/date";
-import { STATUS_LABEL_TH, STATUS_BADGE_VARIANT } from "@/lib/status";
-import { Badge } from "@/components/ui/badge";
+import { STATUS_LABEL_TH } from "@/lib/status";
+import { ApprovalStatusBadge } from "@/components/approval-status-badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DateRangeFields } from "@/components/date-range-fields";
 import { Search } from "lucide-react";
 import type { LeaveStatus } from "@/lib/supabase/types";
+import { displayName } from "@/lib/users";
+import { isAlreadyActedByApprover } from "@/lib/leave-requests";
 
 interface SearchParams {
   status?: string;
   leave_type_id?: string;
+  team_id?: string;
   from?: string;
   to?: string;
 }
@@ -38,6 +42,14 @@ export default async function LeaveRequestsSearchPage({
     query = query.neq("status", "draft");
   }
 
+  // A plain employee only ever sees their own leave records here — team-wide
+  // visibility is an approver/admin thing. RLS (migration 0026) already
+  // enforces this at the DB level; filtering explicitly too keeps the intent
+  // obvious and avoids depending solely on RLS for a page-level guarantee.
+  if (appUser.role === "user") {
+    query = query.eq("user_id", appUser.id);
+  }
+
   const statusOptions = (Object.keys(STATUS_LABEL_TH) as LeaveStatus[]).filter(
     (s) => appUser.role !== "approver" || s !== "draft"
   );
@@ -47,6 +59,26 @@ export default async function LeaveRequestsSearchPage({
   if (searchParams.leave_type_id && searchParams.leave_type_id !== "all") {
     query = query.eq("leave_type_id", searchParams.leave_type_id);
   }
+
+  // A plain member's filter is limited to teams they actually belong to
+  // (RLS would return nothing for any other team anyway); an approver/admin
+  // can filter by any team in the org.
+  let teamOptions: { id: string; name: string }[] = [];
+  if (appUser.role === "user") {
+    const { data: memberships } = await supabase.from("user_teams").select("team_id").eq("user_id", appUser.id);
+    const teamIds = (memberships ?? []).map((m) => m.team_id);
+    if (teamIds.length > 0) {
+      const { data: teams } = await supabase.from("teams").select("id, name").in("id", teamIds).order("name");
+      teamOptions = teams ?? [];
+    }
+  } else {
+    const { data: teams } = await supabase.from("teams").select("id, name").eq("is_active", true).order("name");
+    teamOptions = teams ?? [];
+  }
+  if (searchParams.team_id && teamOptions.some((t) => t.id === searchParams.team_id)) {
+    query = query.eq("team_id", searchParams.team_id);
+  }
+
   if (searchParams.from) {
     query = query.gte("end_date", searchParams.from);
   }
@@ -54,21 +86,31 @@ export default async function LeaveRequestsSearchPage({
     query = query.lte("start_date", searchParams.to);
   }
 
-  const [{ data: requests }, { data: leaveTypes }, { data: users }, { data: holidayRows }, { data: ownLeadRows }] =
-    await Promise.all([
-      query,
-      supabase.from("leave_types").select("id, name, color"),
-      appUser.role === "user"
-        ? Promise.resolve({ data: null })
-        : supabase.from("users").select("id, email"),
-      supabase.from("holidays").select("holiday_date, name"),
-      appUser.role === "approver"
-        ? supabase.from("team_leads").select("team_id, approval_order").eq("user_id", appUser.id)
-        : Promise.resolve({ data: null }),
-    ]);
+  const [{ data: requests }, { data: leaveTypes }, { data: holidayRows }, { data: ownLeadRows }] = await Promise.all([
+    query,
+    supabase.from("leave_types").select("id, name, color"),
+    supabase.from("holidays").select("holiday_date, name"),
+    appUser.role === "approver"
+      ? supabase.from("team_leads").select("team_id, approval_order").eq("user_id", appUser.id)
+      : Promise.resolve({ data: null }),
+  ]);
+
+  // Names come from the admin client, scoped to just the requesters in this
+  // already-RLS-filtered result set — the same reasoning as the request
+  // detail page: if a row is visible here at all, who filed it shouldn't
+  // then blank out to "-" because their *current* team membership happens to
+  // not line up with users_select (e.g. they left the team since filing).
+  const requesterIds = Array.from(new Set((requests ?? []).map((r) => r.user_id)));
+  const { data: users } =
+    requesterIds.length > 0
+      ? await createAdminSupabaseClient()
+          .from("users")
+          .select("id, email, nickname")
+          .in("id", requesterIds)
+      : { data: [] as { id: string; email: string; nickname: string | null }[] };
 
   const leaveTypeMap = new Map((leaveTypes ?? []).map((lt) => [lt.id, lt]));
-  const userMap = new Map((users ?? []).map((u) => [u.id, u.email]));
+  const userMap = new Map((users ?? []).map((u) => [u.id, displayName(u)]));
   const holidayMap = new Map((holidayRows ?? []).map((h) => [h.holiday_date, h.name]));
   // A pending request whose current_level has already moved past this
   // approver's own chain position means they already acted (approved) on
@@ -123,6 +165,25 @@ export default async function LeaveRequestsSearchPage({
           </Select>
         </div>
 
+        {teamOptions.length > 0 && (
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">ทีม</Label>
+            <Select name="team_id" defaultValue={searchParams.team_id ?? "all"}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">ทุกทีม</SelectItem>
+                {teamOptions.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
         <DateRangeFields
           fromName="from"
           toName="to"
@@ -144,7 +205,7 @@ export default async function LeaveRequestsSearchPage({
 
         {(requests ?? []).map((r) => {
           const ownOrder = ownApprovalOrderByTeam.get(r.team_id);
-          const alreadyActedByMe = r.status === "pending" && ownOrder != null && r.current_level > ownOrder;
+          const alreadyActedByMe = isAlreadyActedByApprover(r.status, r.current_level, ownOrder);
           return (
             <Link
               key={r.id}
@@ -155,16 +216,12 @@ export default async function LeaveRequestsSearchPage({
                 <span className="text-sm font-medium text-foreground">
                   {leaveTypeMap.get(r.leave_type_id)?.name ?? "-"}
                 </span>
-                {alreadyActedByMe ? (
-                  <Badge variant="secondary">อนุมัติแล้ว รอลำดับถัดไป</Badge>
-                ) : (
-                  <Badge variant={STATUS_BADGE_VARIANT[r.status]}>{STATUS_LABEL_TH[r.status]}</Badge>
-                )}
+                <ApprovalStatusBadge status={r.status} alreadyActedByMe={alreadyActedByMe} />
               </div>
               <p className="text-sm text-muted-foreground">
                 {formatThaiDate(r.start_date)} - {formatThaiDate(r.end_date)} ({r.total_days ?? "-"} วัน)
               </p>
-              {appUser.role !== "user" && (
+              {r.user_id !== appUser.id && (
                 <p className="text-xs text-muted-foreground">โดย {userMap.get(r.user_id) ?? "-"}</p>
               )}
               {r.request_no && <p className="text-xs text-muted-foreground">เลขที่ {r.request_no}</p>}

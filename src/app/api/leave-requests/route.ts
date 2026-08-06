@@ -13,10 +13,6 @@ export async function POST(request: NextRequest) {
   const limited = rateLimitResponse(appUser.id);
   if (limited) return limited;
 
-  if (!appUser.team_id) {
-    return NextResponse.json({ error: "no_team" }, { status: 400 });
-  }
-
   // Approvers only review/approve their team's documents — they never file
   // their own leave. The UI already routes them away from this form; this
   // is the same rule enforced at the write path, so a direct API call can't
@@ -27,11 +23,24 @@ export async function POST(request: NextRequest) {
 
   const body = await request.json().catch(() => null);
   const parsed = leaveRequestInputSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: "invalid_input", issues: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success || !parsed.data.team_id) {
+    return NextResponse.json({ error: "invalid_input", issues: parsed.success ? undefined : parsed.error.flatten() }, { status: 400 });
   }
 
   const supabase = createServerSupabaseClient();
+
+  // A request may only be filed under a team the requester actually belongs
+  // to — RLS's leave_requests_insert_own enforces this too, but checking
+  // here first gives a clean error instead of a raw DB rejection.
+  const { data: membership } = await supabase
+    .from("user_teams")
+    .select("team_id")
+    .eq("user_id", appUser.id)
+    .eq("team_id", parsed.data.team_id)
+    .maybeSingle();
+  if (!membership) {
+    return NextResponse.json({ error: "invalid_input", message: "คุณไม่ได้อยู่ในทีมนี้" }, { status: 400 });
+  }
 
   const { data: leaveType } = await supabase
     .from("leave_types")
@@ -49,7 +58,7 @@ export async function POST(request: NextRequest) {
     .from("leave_requests")
     .insert({
       user_id: appUser.id,
-      team_id: appUser.team_id,
+      team_id: parsed.data.team_id,
       leave_type_id: parsed.data.leave_type_id,
       start_date: parsed.data.start_date,
       end_date: parsed.data.end_date,

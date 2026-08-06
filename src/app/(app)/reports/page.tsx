@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Download } from "lucide-react";
 import type { LeaveStatus } from "@/lib/supabase/types";
+import { displayName } from "@/lib/users";
 
 interface ReportSearchParams {
   user_id?: string;
@@ -25,7 +26,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Repo
   const [{ data: leaveTypes }, { data: teams }, { data: teamUsers }, { data: holidayRows }] = await Promise.all([
     supabase.from("leave_types").select("id, name"),
     appUser.role === "admin" ? supabase.from("teams").select("id, name") : Promise.resolve({ data: null }),
-    isApprover ? supabase.from("users").select("id, email") : Promise.resolve({ data: null }),
+    isApprover ? supabase.from("users").select("id, email, nickname") : Promise.resolve({ data: null }),
     supabase.from("holidays").select("holiday_date, name"),
   ]);
   const holidayMap = new Map((holidayRows ?? []).map((h) => [h.holiday_date, h.name]));
@@ -54,7 +55,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Repo
                 <SelectItem value="all">ทุกคน</SelectItem>
                 {(teamUsers ?? []).map((u) => (
                   <SelectItem key={u.id} value={u.id}>
-                    {u.email}
+                    {displayName(u)}
                   </SelectItem>
                 ))}
               </SelectContent>

@@ -2,23 +2,19 @@ import { requireAppUser } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ProfileTeamForm } from "./profile-team-form";
-import { signOutAction } from "./actions";
+import { signOutAction, updateOwnTeams } from "./actions";
+import { TeamMembershipForm } from "./team-membership-form";
 
 export default async function ProfilePage() {
   const appUser = await requireAppUser();
   const supabase = createServerSupabaseClient();
 
-  const [{ data: teams }, { count: pendingOrApprovedCount }] = await Promise.all([
+  const [{ data: teams }, { data: memberships }] = await Promise.all([
     supabase.from("teams").select("id, name").eq("is_active", true).order("name"),
-    supabase
-      .from("leave_requests")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", appUser.id)
-      .in("status", ["pending", "approved"]),
+    supabase.from("user_teams").select("team_id").eq("user_id", appUser.id),
   ]);
 
-  const hasPendingOrApproved = (pendingOrApprovedCount ?? 0) > 0;
+  const memberTeamIds = new Set((memberships ?? []).map((m) => m.team_id));
 
   const roleLabel = { admin: "ผู้ดูแลระบบ", approver: "หัวหน้าทีม", user: "developer" }[appUser.role];
 
@@ -29,6 +25,12 @@ export default async function ProfilePage() {
           <CardTitle>โปรไฟล์</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-2 text-sm">
+           {appUser.nickname && (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">ชื่อเล่น</span>
+              <span className="font-medium">{appUser.nickname}</span>
+            </div>
+          )}
           <div className="flex justify-between">
             <span className="text-muted-foreground">อีเมล</span>
             <span className="font-medium">{appUser.email}</span>
@@ -45,10 +47,10 @@ export default async function ProfilePage() {
           <CardTitle>ทีม</CardTitle>
         </CardHeader>
         <CardContent>
-          <ProfileTeamForm
+          <TeamMembershipForm
             teams={teams ?? []}
-            currentTeamId={appUser.team_id}
-            disabled={hasPendingOrApproved}
+            initialSelected={Array.from(memberTeamIds)}
+            action={updateOwnTeams}
           />
         </CardContent>
       </Card>

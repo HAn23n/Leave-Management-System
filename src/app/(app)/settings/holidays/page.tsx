@@ -5,6 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CalendarDateField } from "@/components/calendar-date-field";
+import { ToastForm } from "@/components/toast-form";
+import { DeleteButton } from "@/components/delete-button";
 import { createHoliday, deleteHoliday } from "./actions";
 import type { Holiday } from "@/lib/supabase/types";
 
@@ -24,13 +26,13 @@ export default async function HolidaysSettingsPage() {
     <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-4 p-4 pb-24">
       <h1 className="text-lg font-semibold text-foreground">วันหยุด</h1>
 
-      <form action={createHoliday} className="flex gap-2">
+      <ToastForm action={createHoliday} successTitle="เพิ่มวันหยุดแล้ว" resetOnSuccess className="flex gap-2">
         <div className="w-40">
           <CalendarDateField name="holiday_date" holidays={holidayMap} />
         </div>
         <Input name="name" placeholder="ชื่อวันหยุด" required className="flex-1" />
         <Button type="submit">เพิ่ม</Button>
-      </form>
+      </ToastForm>
 
       <div className="flex flex-col gap-2">
         {(holidays ?? []).map((h) => (
@@ -41,12 +43,13 @@ export default async function HolidaysSettingsPage() {
             </div>
             <div className="flex items-center gap-2">
               <Badge variant={h.source === "manual" ? "outline" : "secondary"}>{SOURCE_LABEL[h.source]}</Badge>
-              <form action={deleteHoliday}>
-                <input type="hidden" name="id" value={h.id} />
-                <Button type="submit" size="sm" variant="ghost">
-                  ลบ
-                </Button>
-              </form>
+              <DeleteButton
+                action={deleteHoliday}
+                fields={{ id: h.id }}
+                confirmTitle="ลบวันหยุดนี้?"
+                confirmDescription={`${h.name} (${formatThaiDate(h.holiday_date, "long")}) จะถูกลบออกจากระบบ`}
+                successTitle="ลบวันหยุดแล้ว"
+              />
             </div>
           </div>
         ))}

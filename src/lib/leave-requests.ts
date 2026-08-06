@@ -1,5 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { waitUntil } from "@vercel/functions";
 import type { AppUser, Database, LeaveRequest, LeaveStatus } from "@/lib/supabase/types";
 import { resolveApprovalChain } from "@/lib/approval-chain";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
@@ -7,6 +8,22 @@ import { safeDbErrorMessage } from "@/lib/db-error";
 import { sendOrQueueEmail } from "@/lib/email-outbox";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Whether the viewing approver has already acted at their own level of this
+ * request's chain — the request's overall status is still "pending" (other
+ * levels remain), but from this approver's point of view it isn't waiting on
+ * them anymore. Shared so the dashboard card, search list, and detail page
+ * all swap the plain "รออนุมัติ" badge for "อนุมัติแล้ว รอลำดับถัดไป" the
+ * same way instead of drifting between three separately-written checks.
+ */
+export function isAlreadyActedByApprover(
+  status: LeaveStatus,
+  currentLevel: number,
+  ownApprovalOrder: number | null | undefined
+): boolean {
+  return status === "pending" && ownApprovalOrder != null && currentLevel > ownApprovalOrder;
+}
 
 /**
  * Looks a request up by its friendly request_no (the normal URL param since
@@ -171,33 +188,38 @@ export async function decideOnPendingRequest({
       from_status: "pending",
       to_status: "pending",
       note: note ? `อนุมัติลำดับที่ ${current.current_level}: ${note}` : `อนุมัติลำดับที่ ${current.current_level}`,
+      level: current.current_level,
     });
 
-    {
-      const [{ data: requester }, { data: leaveType }] = await Promise.all([
-        supabase.from("users").select("email").eq("id", current.user_id).single(),
-        supabase.from("leave_types").select("name").eq("id", current.leave_type_id).single(),
-      ]);
-      if (requester) {
-        await sendOrQueueEmail(
-          admin,
-          {
-            type: "new_request",
-            payload: {
-              approverEmail: nextLevel.approver.email,
-              requesterEmail: requester.email,
-              requestNo: current.request_no,
-              leaveTypeName: leaveType?.name ?? "",
-              startDate: current.start_date,
-              endDate: current.end_date,
-              totalDays: current.total_days,
-              requestUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/leave-requests/${current.request_no}`,
+    // Live SMTP send — don't make the actor wait on it before their click
+    // gets a response; waitUntil finishes it in the background instead.
+    waitUntil(
+      (async () => {
+        const [{ data: requester }, { data: leaveType }] = await Promise.all([
+          supabase.from("users").select("email").eq("id", current.user_id).single(),
+          supabase.from("leave_types").select("name").eq("id", current.leave_type_id).single(),
+        ]);
+        if (requester) {
+          await sendOrQueueEmail(
+            admin,
+            {
+              type: "new_request",
+              payload: {
+                approverEmail: nextLevel.approver.email,
+                requesterEmail: requester.email,
+                requestNo: current.request_no,
+                leaveTypeName: leaveType?.name ?? "",
+                startDate: current.start_date,
+                endDate: current.end_date,
+                totalDays: current.total_days,
+                requestUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/leave-requests/${current.request_no}`,
+              },
             },
-          },
-          nextLevel.approver.email
-        );
-      }
-    }
+            nextLevel.approver.email
+          );
+        }
+      })()
+    );
 
     return { ok: true, request: data };
   }
@@ -220,33 +242,35 @@ export async function decideOnPendingRequest({
   if (!result.ok) return result;
 
   const requestRow = result.request!;
-  {
-    const [{ data: requester }, { data: leaveType }] = await Promise.all([
-      supabase.from("users").select("email").eq("id", requestRow.user_id).single(),
-      supabase.from("leave_types").select("name").eq("id", requestRow.leave_type_id).single(),
-    ]);
+  waitUntil(
+    (async () => {
+      const [{ data: requester }, { data: leaveType }] = await Promise.all([
+        supabase.from("users").select("email").eq("id", requestRow.user_id).single(),
+        supabase.from("leave_types").select("name").eq("id", requestRow.leave_type_id).single(),
+      ]);
 
-    if (requester) {
-      await sendOrQueueEmail(
-        createAdminSupabaseClient(),
-        {
-          type: "decision",
-          payload: {
-            requesterEmail: requester.email,
-            requestNo: requestRow.request_no,
-            leaveTypeName: leaveType?.name ?? "",
-            startDate: requestRow.start_date,
-            endDate: requestRow.end_date,
-            decision,
-            approverEmail: actor.email,
-            approverNote: note,
-            requestUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/leave-requests/${requestRow.request_no}`,
+      if (requester) {
+        await sendOrQueueEmail(
+          createAdminSupabaseClient(),
+          {
+            type: "decision",
+            payload: {
+              requesterEmail: requester.email,
+              requestNo: requestRow.request_no,
+              leaveTypeName: leaveType?.name ?? "",
+              startDate: requestRow.start_date,
+              endDate: requestRow.end_date,
+              decision,
+              approverEmail: actor.email,
+              approverNote: note,
+              requestUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/leave-requests/${requestRow.request_no}`,
+            },
           },
-        },
-        requester.email
-      );
-    }
-  }
+          requester.email
+        );
+      }
+    })()
+  );
 
   return result;
 }
@@ -310,33 +334,38 @@ export async function skipCurrentApprover({
       from_status: "pending",
       to_status: "pending",
       note: skipNote,
+      level: current.current_level,
     });
 
-    {
-      const [{ data: requester }, { data: leaveType }] = await Promise.all([
-        supabase.from("users").select("email").eq("id", current.user_id).single(),
-        supabase.from("leave_types").select("name").eq("id", current.leave_type_id).single(),
-      ]);
-      if (requester) {
-        await sendOrQueueEmail(
-          admin,
-          {
-            type: "new_request",
-            payload: {
-              approverEmail: nextLevel.approver.email,
-              requesterEmail: requester.email,
-              requestNo: current.request_no,
-              leaveTypeName: leaveType?.name ?? "",
-              startDate: current.start_date,
-              endDate: current.end_date,
-              totalDays: current.total_days,
-              requestUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/leave-requests/${current.request_no}`,
+    // Live SMTP send — don't make the actor wait on it before their click
+    // gets a response; waitUntil finishes it in the background instead.
+    waitUntil(
+      (async () => {
+        const [{ data: requester }, { data: leaveType }] = await Promise.all([
+          supabase.from("users").select("email").eq("id", current.user_id).single(),
+          supabase.from("leave_types").select("name").eq("id", current.leave_type_id).single(),
+        ]);
+        if (requester) {
+          await sendOrQueueEmail(
+            admin,
+            {
+              type: "new_request",
+              payload: {
+                approverEmail: nextLevel.approver.email,
+                requesterEmail: requester.email,
+                requestNo: current.request_no,
+                leaveTypeName: leaveType?.name ?? "",
+                startDate: current.start_date,
+                endDate: current.end_date,
+                totalDays: current.total_days,
+                requestUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/leave-requests/${current.request_no}`,
+              },
             },
-          },
-          nextLevel.approver.email
-        );
-      }
-    }
+            nextLevel.approver.email
+          );
+        }
+      })()
+    );
 
     return { ok: true, request: data };
   }
@@ -353,35 +382,37 @@ export async function skipCurrentApprover({
   if (!result.ok) return result;
 
   const requestRow = result.request!;
-  {
-    const { data: requester } = await supabase.from("users").select("email").eq("id", requestRow.user_id).single();
-    const { data: leaveType } = await supabase
-      .from("leave_types")
-      .select("name")
-      .eq("id", requestRow.leave_type_id)
-      .single();
+  waitUntil(
+    (async () => {
+      const { data: requester } = await supabase.from("users").select("email").eq("id", requestRow.user_id).single();
+      const { data: leaveType } = await supabase
+        .from("leave_types")
+        .select("name")
+        .eq("id", requestRow.leave_type_id)
+        .single();
 
-    if (requester) {
-      await sendOrQueueEmail(
-        createAdminSupabaseClient(),
-        {
-          type: "decision",
-          payload: {
-            requesterEmail: requester.email,
-            requestNo: requestRow.request_no,
-            leaveTypeName: leaveType?.name ?? "",
-            startDate: requestRow.start_date,
-            endDate: requestRow.end_date,
-            decision: "approved",
-            approverEmail: actor.email,
-            approverNote: skipNote,
-            requestUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/leave-requests/${requestRow.request_no}`,
+      if (requester) {
+        await sendOrQueueEmail(
+          createAdminSupabaseClient(),
+          {
+            type: "decision",
+            payload: {
+              requesterEmail: requester.email,
+              requestNo: requestRow.request_no,
+              leaveTypeName: leaveType?.name ?? "",
+              startDate: requestRow.start_date,
+              endDate: requestRow.end_date,
+              decision: "approved",
+              approverEmail: actor.email,
+              approverNote: skipNote,
+              requestUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/leave-requests/${requestRow.request_no}`,
+            },
           },
-        },
-        requester.email
-      );
-    }
-  }
+          requester.email
+        );
+      }
+    })()
+  );
 
   return result;
 }

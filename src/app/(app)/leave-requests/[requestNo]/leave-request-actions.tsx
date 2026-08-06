@@ -78,19 +78,10 @@ export function LeaveRequestActions({
     router.refresh();
   }
 
-  // Approvers only review/approve their team's documents — they never submit
-  // their own leave, even an old draft/returned one from before they held the role.
   const canOwnerSubmit = isOwner && currentUserRole !== "approver" && (status === "draft" || status === "returned");
   const canOwnerCancel = isOwner && (status === "draft" || status === "pending");
-  // Sequential approval chain: hide the buttons if it isn't this approver's
-  // turn yet (an earlier level hasn't signed off) — acting would just fail.
   const canApproverAct = isApproverInScope && !isOwner && status === "pending" && isCurrentApprover;
-  // Only admin may withdraw a request that's already been decided
-  // (approved/returned) — an approver's authority stops at approve/reject/
-  // return on their own turn, cancelling someone else's finished document
-  // isn't theirs to do. Mirror this in /api/leave-requests/[id]/cancel.
   const canApproverCancel = currentUserRole === "admin" && (status === "approved" || status === "returned");
-
   if (!canOwnerSubmit && !canOwnerCancel && !canApproverAct && !canApproverCancel) {
     return null;
   }
@@ -110,8 +101,6 @@ export function LeaveRequestActions({
           <Button disabled={busy} onClick={() => post("approve")}>
             อนุมัติ
           </Button>
-          {/* Reject/return are secondary to approve — grouped side-by-side and
-              lighter-weight instead of two more full-width stacked buttons. */}
           <div className="flex gap-2">
             <Button
               disabled={busy}
@@ -132,10 +121,6 @@ export function LeaveRequestActions({
               ไม่อนุมัติ
             </Button>
           </div>
-
-          {/* Admin-only escape hatch: hand the current level off to the next
-              approver (or finalize, if there is none) without needing the
-              stuck approver to act — e.g. they're out sick or have left. */}
           {currentUserRole === "admin" && (
             <Button
               disabled={busy}
@@ -143,7 +128,7 @@ export function LeaveRequestActions({
               size="sm"
               onClick={() => setNoteAction(noteAction === "skip" ? null : "skip")}
             >
-              ข้ามผู้อนุมัติ (แอดมิน)
+              ข้ามผู้อนุมัติ
             </Button>
           )}
         </>

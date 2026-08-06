@@ -34,6 +34,13 @@ export interface TeamLead {
   created_at: string;
 }
 
+export interface UserTeam {
+  id: string;
+  user_id: string;
+  team_id: string;
+  created_at: string;
+}
+
 export interface UserTeamLog {
   id: string;
   user_id: string;
@@ -52,7 +59,13 @@ export interface ApproverMapping {
 export interface PendingUserRole {
   email: string;
   role: UserRole;
-  team_id: string | null;
+  created_at: string;
+}
+
+export interface PendingUserTeam {
+  id: string;
+  email: string;
+  team_id: string;
   created_at: string;
 }
 
@@ -110,6 +123,7 @@ export interface LeaveRequestLog {
   from_status: LeaveStatus | null;
   to_status: LeaveStatus;
   note: string | null;
+  level: number | null;
   created_at: string;
 }
 
@@ -163,9 +177,11 @@ export interface Database {
       teams: Table<Team>;
       users: Table<AppUser>;
       team_leads: Table<TeamLead>;
+      user_teams: Table<UserTeam>;
       user_team_logs: Table<UserTeamLog>;
       approver_mappings: Table<ApproverMapping>;
       pending_user_roles: Table<PendingUserRole>;
+      pending_user_teams: Table<PendingUserTeam>;
       pending_team_leads: Table<PendingTeamLead>;
       leave_types: Table<LeaveType>;
       holidays: Table<Holiday>;

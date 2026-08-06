@@ -32,20 +32,21 @@ export async function GET(request: NextRequest) {
     // Lowercased to match how pending_user_roles/pending_team_leads store
     // (and are looked up by) email everywhere else in the app.
     const email = (authUser.email ?? "").toLowerCase();
-    const [{ data: pendingRole }, { data: pendingTeamLeads }] = await Promise.all([
+    const [{ data: pendingRole }, { data: pendingUserTeams }, { data: pendingTeamLeads }] = await Promise.all([
       admin.from("pending_user_roles").select("*").eq("email", email).maybeSingle(),
+      admin.from("pending_user_teams").select("*").eq("email", email).order("created_at"),
       admin.from("pending_team_leads").select("*").eq("email", email).order("created_at"),
     ]);
 
-    if (pendingRole || (pendingTeamLeads && pendingTeamLeads.length > 0)) {
+    if (pendingRole || (pendingUserTeams && pendingUserTeams.length > 0) || (pendingTeamLeads && pendingTeamLeads.length > 0)) {
       // An admin pre-provisioned this email's role/team(s) ahead of time.
       // Leading at least one team makes them an approver regardless of any
       // pre-set role, unless that role was explicitly 'admin'. Home team
-      // prefers the explicit pre-set one, else defaults to the first
-      // pre-assigned team so they're not stuck needing team selection.
+      // prefers the first pre-assigned membership, else the first team
+      // they'll lead, so they're not stuck needing team selection.
       const leadsTeams = pendingTeamLeads && pendingTeamLeads.length > 0;
       const role = pendingRole?.role === "admin" ? "admin" : leadsTeams ? "approver" : (pendingRole?.role ?? "user");
-      const teamId = pendingRole?.team_id ?? (leadsTeams ? pendingTeamLeads![0].team_id : null);
+      const teamId = pendingUserTeams?.[0]?.team_id ?? (leadsTeams ? pendingTeamLeads![0].team_id : null);
 
       // Insert via the service-role client — users_insert_self's RLS WITH
       // CHECK would otherwise cap a client-driven self-insert at role='user'
@@ -64,12 +65,28 @@ export async function GET(request: NextRequest) {
         return NextResponse.redirect(`${origin}/login?error=profile_create_failed`);
       }
 
+      // team_id above is written directly (service-role, first-ever row) —
+      // sync_user_home_team only reacts to user_teams changes, so every
+      // pre-assigned membership needs creating explicitly to match. A
+      // pre-provisioned lead is also always a member of the team(s) they
+      // lead, even if they were never separately pre-provisioned as a member
+      // — otherwise they end up with a team_leads row but no user_teams row,
+      // making them invisible to co-leads/requesters under it (users_select
+      // and leave_requests_select both key off user_teams).
+      const teamIdsToJoin = Array.from(
+        new Set([...(pendingUserTeams ?? []).map((pt) => pt.team_id), ...(pendingTeamLeads ?? []).map((lead) => lead.team_id)])
+      );
+      if (teamIdsToJoin.length > 0) {
+        await admin.from("user_teams").insert(teamIdsToJoin.map((teamId) => ({ user_id: authUser.id, team_id: teamId })));
+      }
+
       for (const lead of pendingTeamLeads ?? []) {
         await addTeamLead(admin, lead.team_id, authUser.id, lead.approval_order ?? undefined);
       }
 
       await Promise.all([
         admin.from("pending_user_roles").delete().eq("email", email),
+        admin.from("pending_user_teams").delete().eq("email", email),
         admin.from("pending_team_leads").delete().eq("email", email),
       ]);
 

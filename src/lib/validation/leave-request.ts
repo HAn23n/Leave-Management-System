@@ -6,6 +6,10 @@ const period = z.enum(["full", "morning", "afternoon"]);
 export const leaveRequestInputSchema = z
   .object({
     leave_type_id: z.string().uuid(),
+    // Only meaningful (and required) on create — team_id is immutable once a
+    // request exists (see guard_leave_request_field_ownership), so the edit
+    // form/route never sends or reads it.
+    team_id: z.string().uuid().optional(),
     start_date: isoDate,
     end_date: isoDate,
     start_period: period,

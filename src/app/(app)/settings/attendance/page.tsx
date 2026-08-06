@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { TimeSelect } from "./time-select";
 import { updateAttendanceSettings } from "./actions";
 
 export default async function AttendanceSettingsPage() {
@@ -23,20 +24,16 @@ export default async function AttendanceSettingsPage() {
           <form action={updateAttendanceSettings} className="flex flex-col gap-4">
             <div className="space-y-1.5">
               <Label>เวลาแจ้งเตือนเช็คอิน</Label>
-              <Input
-                type="time"
+              <TimeSelect
                 name="check_in_reminder_time"
                 defaultValue={settings?.check_in_reminder_time?.slice(0, 5) ?? "08:30"}
-                required
               />
             </div>
             <div className="space-y-1.5">
               <Label>เวลาแจ้งเตือนเช็คเอาท์</Label>
-              <Input
-                type="time"
+              <TimeSelect
                 name="check_out_reminder_time"
                 defaultValue={settings?.check_out_reminder_time?.slice(0, 5) ?? "17:30"}
-                required
               />
             </div>
             <div className="space-y-1.5">

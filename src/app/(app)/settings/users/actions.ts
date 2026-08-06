@@ -27,31 +27,21 @@ export async function updateUserRole(formData: FormData) {
   revalidatePath("/settings/teams");
 }
 
-// A person's home team (users.team_id, for filing their own leave) is
-// independent of which teams they approve for (team_leads) — an approver
-// can lead any number of teams regardless of their own home team, managed
-// explicitly via updateApprovedTeams below.
-export async function updateUserTeam(formData: FormData) {
-  await requireAdmin();
-  const id = String(formData.get("id"));
-  const rawTeamId = String(formData.get("team_id") || "");
-  const teamId = rawTeamId === "none" ? "" : rawTeamId;
-
-  const supabase = createServerSupabaseClient();
-  await supabase.from("users").update({ team_id: teamId || null }).eq("id", id);
-
-  revalidatePath("/settings/users");
-}
-
-async function syncApprovedTeams(supabase: SupabaseClient<Database>, userId: string, teamIds: string[]) {
-  const { data: current } = await supabase.from("team_leads").select("id, team_id").eq("user_id", userId);
+async function syncMemberships(
+  supabase: SupabaseClient<Database>,
+  table: "user_teams" | "team_leads",
+  userId: string,
+  teamIds: string[],
+  onAdd: (teamId: string) => Promise<void>
+) {
+  const { data: current } = await supabase.from(table).select("id, team_id").eq("user_id", userId);
   const currentTeamIds = new Set((current ?? []).map((c) => c.team_id));
   const nextTeamIds = new Set(teamIds);
 
   const toRemove = (current ?? []).filter((c) => !nextTeamIds.has(c.team_id));
   if (toRemove.length > 0) {
     await supabase
-      .from("team_leads")
+      .from(table)
       .delete()
       .in(
         "id",
@@ -59,21 +49,54 @@ async function syncApprovedTeams(supabase: SupabaseClient<Database>, userId: str
       );
   }
 
-  // Role follows automatically from team_leads membership either direction
-  // — see trg_team_leads_sync_role (migration 0018).
   for (const teamId of teamIds) {
     if (currentTeamIds.has(teamId)) continue;
-    await addTeamLead(supabase, teamId, userId);
+    await onAdd(teamId);
   }
 }
 
+// Which teams someone is a *member* of (files leave under, sees the team's
+// records) is independent of which teams they *approve for* (team_leads,
+// managed below) — a person can be a member of teams they don't lead, and
+// vice versa. users.team_id (the "primary" one shown elsewhere) follows
+// automatically — see sync_user_home_team, migration 0023.
+export async function updateMemberTeams(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id"));
+  const teamIds = formData.getAll("team_ids").map(String);
+
+  const supabase = createServerSupabaseClient();
+  await syncMemberships(supabase, "user_teams", id, teamIds, async (teamId) => {
+    const { error } = await supabase.from("user_teams").insert({ user_id: id, team_id: teamId });
+    if (error) throw error;
+  });
+
+  revalidatePath("/settings/users");
+}
+
+export async function selectAllMemberTeams(formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id"));
+
+  const supabase = createServerSupabaseClient();
+  const { data: teams } = await supabase.from("teams").select("id").eq("is_active", true);
+  await syncMemberships(supabase, "user_teams", id, (teams ?? []).map((t) => t.id), async (teamId) => {
+    const { error } = await supabase.from("user_teams").insert({ user_id: id, team_id: teamId });
+    if (error) throw error;
+  });
+
+  revalidatePath("/settings/users");
+}
+
+// Role follows automatically from team_leads membership either direction —
+// see trg_team_leads_sync_role (migration 0018).
 export async function updateApprovedTeams(formData: FormData) {
   await requireAdmin();
   const id = String(formData.get("id"));
   const teamIds = formData.getAll("team_ids").map(String);
 
   const supabase = createServerSupabaseClient();
-  await syncApprovedTeams(supabase, id, teamIds);
+  await syncMemberships(supabase, "team_leads", id, teamIds, (teamId) => addTeamLead(supabase, teamId, id));
 
   revalidatePath("/settings/users");
   revalidatePath("/settings/teams");
@@ -85,10 +108,8 @@ export async function selectAllApprovedTeams(formData: FormData) {
 
   const supabase = createServerSupabaseClient();
   const { data: teams } = await supabase.from("teams").select("id").eq("is_active", true);
-  await syncApprovedTeams(
-    supabase,
-    id,
-    (teams ?? []).map((t) => t.id)
+  await syncMemberships(supabase, "team_leads", id, (teams ?? []).map((t) => t.id), (teamId) =>
+    addTeamLead(supabase, teamId, id)
   );
 
   revalidatePath("/settings/users");
@@ -128,11 +149,15 @@ export async function preProvisionUser(formData: FormData) {
   const { data: existingUser } = await supabase.from("users").select("id").eq("email", email).maybeSingle();
 
   if (existingUser) {
-    // Already signed in before — apply directly instead of queueing.
-    await supabase
-      .from("users")
-      .update({ role: role as UserRole, ...(teamId ? { team_id: teamId } : {}) })
-      .eq("id", existingUser.id);
+    // Already signed in before — apply directly instead of queueing. Team
+    // membership goes through user_teams (users.team_id just follows along —
+    // see sync_user_home_team, migration 0023), not a direct column write.
+    await supabase.from("users").update({ role: role as UserRole }).eq("id", existingUser.id);
+    if (teamId) {
+      await supabase
+        .from("user_teams")
+        .upsert({ user_id: existingUser.id, team_id: teamId }, { onConflict: "user_id,team_id", ignoreDuplicates: true });
+    }
   } else {
     await supabase
       .from("pending_user_roles")

@@ -34,9 +34,14 @@ export function TeamSelectForm({ teams }: { teams: TeamOption[] }) {
       return;
     }
 
-    const { error: updateError } = await supabase.from("users").update({ team_id: selected }).eq("id", user.id);
+    // Membership lives in user_teams now (a person can belong to more than
+    // one team) — users.team_id follows automatically (see
+    // sync_user_home_team, migration 0023), it's never written directly.
+    const { error: insertError } = await supabase
+      .from("user_teams")
+      .insert({ user_id: user.id, team_id: selected });
 
-    if (updateError) {
+    if (insertError) {
       setError("บันทึกข้อมูลไม่สำเร็จ กรุณาลองใหม่อีกครั้ง");
       setLoading(false);
       return;

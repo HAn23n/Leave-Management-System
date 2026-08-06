@@ -73,8 +73,12 @@ export async function assignTeamLeadByEmail(formData: FormData) {
 
   // Fill in a missing team assignment (e.g. an approver added before ever
   // being put on a team) — but never override an existing different team.
+  // Goes through user_teams (users.team_id just follows along — see
+  // sync_user_home_team, migration 0023), not a direct column write.
   if (!user.team_id) {
-    await supabase.from("users").update({ team_id: teamId }).eq("id", user.id);
+    await supabase
+      .from("user_teams")
+      .upsert({ user_id: user.id, team_id: teamId }, { onConflict: "user_id,team_id", ignoreDuplicates: true });
   }
 
   // A person can lead more than one team at once — no cleanup of their

@@ -27,6 +27,8 @@ interface LeaveRequestFormProps {
   existingLeave: ExistingLeaveRange[];
   currentUserRole: UserRole;
   existing?: LeaveRequest;
+  /** The requester's team memberships — only used (and required) in create mode; team_id is immutable once a request exists. */
+  teams?: { id: string; name: string }[];
 }
 
 export function LeaveRequestForm({
@@ -36,6 +38,7 @@ export function LeaveRequestForm({
   existingLeave,
   currentUserRole,
   existing,
+  teams = [],
 }: LeaveRequestFormProps) {
   const router = useRouter();
   const holidayDates = useMemo(() => holidays.map((h) => h.holiday_date), [holidays]);
@@ -43,6 +46,7 @@ export function LeaveRequestForm({
   const occupiedDates = useMemo(() => buildOccupiedDates(existingLeave), [existingLeave]);
 
   const [leaveTypeId, setLeaveTypeId] = useState(existing?.leave_type_id ?? leaveTypes[0]?.id ?? "");
+  const [teamId, setTeamId] = useState(existing?.team_id ?? teams[0]?.id ?? "");
   const [startDate, setStartDate] = useState(existing?.start_date ?? todayIso());
   const [endDate, setEndDate] = useState(existing?.end_date ?? todayIso());
   const [startPeriod, setStartPeriod] = useState<LeavePeriodClient>(existing?.start_period ?? "full");
@@ -61,7 +65,7 @@ export function LeaveRequestForm({
     } else {
       mounted.current = true;
     }
-  }, [leaveTypeId, startDate, endDate, startPeriod, endPeriod, reason]);
+  }, [leaveTypeId, teamId, startDate, endDate, startPeriod, endPeriod, reason]);
 
   const { confirmOpen, confirmLeave, cancelLeave, navigate } = useUnsavedChangesGuard(dirty && !submitting);
 
@@ -91,9 +95,16 @@ export function LeaveRequestForm({
       toast({ variant: "destructive", title: "บันทึกไม่สำเร็จ", description: message });
       return null;
     }
+    if (mode === "create" && !teamId) {
+      const message = "กรุณาเลือกทีม";
+      setError(message);
+      toast({ variant: "destructive", title: "บันทึกไม่สำเร็จ", description: message });
+      return null;
+    }
 
     const payload = {
       leave_type_id: leaveTypeId,
+      ...(mode === "create" ? { team_id: teamId } : {}),
       start_date: startDate,
       end_date: endDate,
       start_period: startPeriod,
@@ -189,6 +200,24 @@ export function LeaveRequestForm({
   return (
     <div className="flex flex-1 flex-col">
       <div className="flex-1 space-y-5 p-4 pb-4">
+        {mode === "create" && (
+          <div className="space-y-2">
+            <Label>ทีม</Label>
+            <Select value={teamId} onValueChange={setTeamId} disabled={busy}>
+              <SelectTrigger>
+                <SelectValue placeholder="เลือกทีม" />
+              </SelectTrigger>
+              <SelectContent>
+                {teams.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
         <div className="space-y-2">
           <Label>ประเภทการลา</Label>
           <Select value={leaveTypeId} onValueChange={setLeaveTypeId} disabled={busy}>

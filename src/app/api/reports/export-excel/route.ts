@@ -19,8 +19,12 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const supabase = createServerSupabaseClient();
 
+  // A plain employee (not approver/admin) can only ever export their own
+  // records — never lets the user_id query param widen that, even though
+  // RLS (migration 0026) already enforces it at the DB level too.
+  const isApprover = appUser.role === "approver" || appUser.role === "admin";
   const { data: requests, error } = await buildReportQuery(supabase, {
-    userId: searchParams.get("user_id") ?? undefined,
+    userId: isApprover ? (searchParams.get("user_id") ?? undefined) : appUser.id,
     teamId: searchParams.get("team_id") ?? undefined,
     leaveTypeId: searchParams.get("leave_type_id") ?? undefined,
     status: searchParams.get("status") ?? undefined,

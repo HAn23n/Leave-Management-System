@@ -32,7 +32,11 @@ async function syncMemberships(
   table: "user_teams" | "team_leads",
   userId: string,
   teamIds: string[],
-  onAdd: (teamId: string) => Promise<void>
+  // Batched, not one call per new team — team_leads' onAdd still loops
+  // internally (addTeamLead has to run one at a time to compute each new
+  // lead's approval_order in sequence), but user_teams' onAdd issues a
+  // single multi-row insert.
+  onAdd: (teamIds: string[]) => Promise<void>
 ) {
   const { data: current } = await supabase.from(table).select("id, team_id").eq("user_id", userId);
   const currentTeamIds = new Set((current ?? []).map((c) => c.team_id));
@@ -49,9 +53,9 @@ async function syncMemberships(
       );
   }
 
-  for (const teamId of teamIds) {
-    if (currentTeamIds.has(teamId)) continue;
-    await onAdd(teamId);
+  const toAdd = teamIds.filter((id) => !currentTeamIds.has(id));
+  if (toAdd.length > 0) {
+    await onAdd(toAdd);
   }
 }
 
@@ -66,8 +70,8 @@ export async function updateMemberTeams(formData: FormData) {
   const teamIds = formData.getAll("team_ids").map(String);
 
   const supabase = createServerSupabaseClient();
-  await syncMemberships(supabase, "user_teams", id, teamIds, async (teamId) => {
-    const { error } = await supabase.from("user_teams").insert({ user_id: id, team_id: teamId });
+  await syncMemberships(supabase, "user_teams", id, teamIds, async (toAdd) => {
+    const { error } = await supabase.from("user_teams").insert(toAdd.map((teamId) => ({ user_id: id, team_id: teamId })));
     if (error) throw error;
   });
 
@@ -82,7 +86,11 @@ export async function updateApprovedTeams(formData: FormData) {
   const teamIds = formData.getAll("team_ids").map(String);
 
   const supabase = createServerSupabaseClient();
-  await syncMemberships(supabase, "team_leads", id, teamIds, (teamId) => addTeamLead(supabase, teamId, id));
+  await syncMemberships(supabase, "team_leads", id, teamIds, async (toAdd) => {
+    for (const teamId of toAdd) {
+      await addTeamLead(supabase, teamId, id);
+    }
+  });
 
   revalidatePath("/settings/users");
   revalidatePath("/settings/teams");
@@ -127,15 +135,23 @@ export async function preProvisionUser(formData: FormData) {
     // checked). Membership goes through user_teams (users.team_id just
     // follows along — see sync_user_home_team, migration 0023).
     await supabase.from("users").update({ role: role as UserRole }).eq("id", existingUser.id);
-    for (const teamId of teamIds) {
+    if (teamIds.length > 0) {
       await supabase
         .from("user_teams")
-        .upsert({ user_id: existingUser.id, team_id: teamId }, { onConflict: "user_id,team_id", ignoreDuplicates: true });
+        .upsert(
+          teamIds.map((teamId) => ({ user_id: existingUser.id, team_id: teamId })),
+          { onConflict: "user_id,team_id", ignoreDuplicates: true }
+        );
     }
   } else {
     await supabase.from("pending_user_roles").upsert({ email, role: role as UserRole }, { onConflict: "email" });
-    for (const teamId of teamIds) {
-      await supabase.from("pending_user_teams").upsert({ email, team_id: teamId }, { onConflict: "email,team_id" });
+    if (teamIds.length > 0) {
+      await supabase
+        .from("pending_user_teams")
+        .upsert(
+          teamIds.map((teamId) => ({ email, team_id: teamId })),
+          { onConflict: "email,team_id" }
+        );
     }
   }
 

@@ -67,9 +67,17 @@ export async function GET(request: NextRequest) {
 
       // team_id above is written directly (service-role, first-ever row) —
       // sync_user_home_team only reacts to user_teams changes, so every
-      // pre-assigned membership needs creating explicitly to match.
-      for (const pt of pendingUserTeams ?? []) {
-        await admin.from("user_teams").insert({ user_id: authUser.id, team_id: pt.team_id });
+      // pre-assigned membership needs creating explicitly to match. A
+      // pre-provisioned lead is also always a member of the team(s) they
+      // lead, even if they were never separately pre-provisioned as a member
+      // — otherwise they end up with a team_leads row but no user_teams row,
+      // making them invisible to co-leads/requesters under it (users_select
+      // and leave_requests_select both key off user_teams).
+      const teamIdsToJoin = Array.from(
+        new Set([...(pendingUserTeams ?? []).map((pt) => pt.team_id), ...(pendingTeamLeads ?? []).map((lead) => lead.team_id)])
+      );
+      if (teamIdsToJoin.length > 0) {
+        await admin.from("user_teams").insert(teamIdsToJoin.map((teamId) => ({ user_id: authUser.id, team_id: teamId })));
       }
 
       for (const lead of pendingTeamLeads ?? []) {

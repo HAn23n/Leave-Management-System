@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { LeaveRequestActions } from "./leave-request-actions";
 import { findLeaveRequestByParam } from "@/lib/leave-requests";
 import { resolveApprovalChain } from "@/lib/approval-chain";
+import { displayName } from "@/lib/users";
 
 export default async function LeaveRequestDetailPage({ params }: { params: { requestNo: string } }) {
   const appUser = await requireAppUser();
@@ -37,7 +38,7 @@ export default async function LeaveRequestDetailPage({ params }: { params: { req
     actorIds.length > 0
       ? await supabase.from("users").select("id, email, nickname").in("id", actorIds)
       : { data: [] as { id: string; email: string; nickname: string | null }[] };
-  const actorMap = new Map((actors ?? []).map((a) => [a.id, a.nickname || a.email]));
+  const actorMap = new Map((actors ?? []).map((a) => [a.id, displayName(a)]));
 
   const isOwner = leaveRequest.user_id === appUser.id;
 
@@ -110,7 +111,7 @@ export default async function LeaveRequestDetailPage({ params }: { params: { req
           {leaveRequest.request_no && (
             <Row label="เลขที่เอกสาร" value={leaveRequest.request_no} />
           )}
-          <Row label="ผู้ขอลา" value={requester?.nickname || requester?.email || "-"} />
+          <Row label="ผู้ขอลา" value={displayName(requester)} />
           <Row
             label="วันที่เริ่ม"
             value={`${formatThaiDate(leaveRequest.start_date)} (${PERIOD_LABEL_TH[leaveRequest.start_period]})`}
@@ -121,12 +122,12 @@ export default async function LeaveRequestDetailPage({ params }: { params: { req
           />
           <Row label="จำนวนวันลา" value={leaveRequest.total_days != null ? `${leaveRequest.total_days} วัน` : "-"} />
           <Row label="เหตุผล" value={leaveRequest.reason || "-"} />
-          {approver && <Row label="ผู้อนุมัติล่าสุด" value={approver.nickname || approver.email} />}
+          {approver && <Row label="ผู้อนุมัติล่าสุด" value={displayName(approver)} />}
           {leaveRequest.status === "pending" && chain?.type === "chain" && totalLevels > 1 && currentLevelIndex >= 0 && (
             <Row label="ลำดับอนุมัติ" value={`${currentLevelIndex + 1} / ${totalLevels}`} />
           )}
           {leaveRequest.status === "pending" && pendingLevelApprover && (
-            <Row label="รอการอนุมัติจาก" value={pendingLevelApprover.nickname || pendingLevelApprover.email} />
+            <Row label="รอการอนุมัติจาก" value={displayName(pendingLevelApprover)} />
           )}
           {leaveRequest.approver_note && <Row label="หมายเหตุ" value={leaveRequest.approver_note} />}
         </CardContent>

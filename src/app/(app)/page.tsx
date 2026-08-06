@@ -9,6 +9,7 @@ import { LeaveCalendarMonth, type CalendarLeaveDay } from "@/components/leave-ca
 import { PendingTeamRequestsCard } from "@/components/pending-team-requests-card";
 import { AttendanceCard } from "@/components/attendance-card";
 import type { Database, LeaveStatus } from "@/lib/supabase/types";
+import { displayName } from "@/lib/users";
 
 const SUMMARY_STATUSES: LeaveStatus[] = ["draft", "pending", "approved", "rejected", "returned"];
 
@@ -50,7 +51,7 @@ async function loadPendingTeamRequests(supabase: SupabaseClient<Database>) {
       supabase.from("users").select("id, email, nickname").in("id", userIds),
       supabase.from("leave_types").select("id, name").in("id", leaveTypeIds),
     ]);
-    requesterMap = new Map((users ?? []).map((u) => [u.id, u.nickname || u.email]));
+    requesterMap = new Map((users ?? []).map((u) => [u.id, displayName(u)]));
     leaveTypeMap = new Map((pendingLeaveTypes ?? []).map((lt) => [lt.id, lt.name]));
   }
 

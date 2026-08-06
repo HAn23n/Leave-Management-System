@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { signOutAction, updateOwnTeams } from "./actions";
+import { TeamMembershipForm } from "./team-membership-form";
 
 export default async function ProfilePage() {
   const appUser = await requireAppUser();
@@ -46,28 +47,11 @@ export default async function ProfilePage() {
           <CardTitle>ทีม</CardTitle>
         </CardHeader>
         <CardContent>
-          <form action={updateOwnTeams} className="flex flex-col gap-3">
-            <div className="flex flex-wrap gap-3">
-              {(teams ?? []).map((t) => (
-                <label key={t.id} className="flex items-center gap-1.5 text-sm text-foreground">
-                  <input
-                    type="checkbox"
-                    name="team_ids"
-                    value={t.id}
-                    defaultChecked={memberTeamIds.has(t.id)}
-                    className="h-4 w-4 rounded border-input accent-primary"
-                  />
-                  {t.name}
-                </label>
-              ))}
-              {(teams ?? []).length === 0 && (
-                <span className="text-sm text-muted-foreground">ยังไม่มีทีมในระบบ</span>
-              )}
-            </div>
-            <Button type="submit" size="sm" variant="outline" className="self-start">
-              บันทึกทีม
-            </Button>
-          </form>
+          <TeamMembershipForm
+            teams={teams ?? []}
+            initialSelected={Array.from(memberTeamIds)}
+            action={updateOwnTeams}
+          />
         </CardContent>
       </Card>
 

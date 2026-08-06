@@ -71,15 +71,16 @@ export async function assignTeamLeadByEmail(formData: FormData) {
     return;
   }
 
-  // Fill in a missing team assignment (e.g. an approver added before ever
-  // being put on a team) — but never override an existing different team.
-  // Goes through user_teams (users.team_id just follows along — see
-  // sync_user_home_team, migration 0023), not a direct column write.
-  if (!user.team_id) {
-    await supabase
-      .from("user_teams")
-      .upsert({ user_id: user.id, team_id: teamId }, { onConflict: "user_id,team_id", ignoreDuplicates: true });
-  }
+  // A lead is always also a member of the team they lead — needed
+  // regardless of whether they already have a home team elsewhere, or they
+  // end up with a team_leads row but no user_teams row, making them
+  // invisible to co-leads/requesters under this team (users_select and
+  // leave_requests_select both key off user_teams). users.team_id (the
+  // "primary" one) just follows along on its own — see sync_user_home_team,
+  // migration 0023 — this never writes that column directly.
+  await supabase
+    .from("user_teams")
+    .upsert({ user_id: user.id, team_id: teamId }, { onConflict: "user_id,team_id", ignoreDuplicates: true });
 
   // A person can lead more than one team at once — no cleanup of their
   // other team_leads rows here. New lead goes last in the approval order

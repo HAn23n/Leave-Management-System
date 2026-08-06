@@ -123,6 +123,7 @@ export interface LeaveRequestLog {
   from_status: LeaveStatus | null;
   to_status: LeaveStatus;
   note: string | null;
+  level: number | null;
   created_at: string;
 }
 

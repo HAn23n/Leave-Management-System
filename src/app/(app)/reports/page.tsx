@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Download } from "lucide-react";
 import type { LeaveStatus } from "@/lib/supabase/types";
+import { displayName } from "@/lib/users";
 
 interface ReportSearchParams {
   user_id?: string;
@@ -54,7 +55,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Repo
                 <SelectItem value="all">ทุกคน</SelectItem>
                 {(teamUsers ?? []).map((u) => (
                   <SelectItem key={u.id} value={u.id}>
-                    {u.nickname || u.email}
+                    {displayName(u)}
                   </SelectItem>
                 ))}
               </SelectContent>

@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, LeaveRequest, LeaveStatus } from "@/lib/supabase/types";
+import { displayName } from "@/lib/users";
 
 export interface ReportFilters {
   userId?: string;
@@ -40,64 +41,62 @@ export interface ReportApprovalLevel {
 }
 
 /**
- * The team's currently-configured approval chain for each request — not a
- * historical reconstruction of who actually acted (leave_request_logs would
- * be needed for that, and free-text log notes aren't a reliable source to
- * parse a level number back out of). If a team's chain has changed since a
- * given request was filed, this reflects the chain as it stands today.
- * Batched across all rows (not one resolveApprovalChain call per row) since
- * a report can list many requests at once.
+ * Who actually approved each level of a request, reconstructed from
+ * leave_request_logs rather than the team's currently-configured chain — a
+ * team's chain can be reconfigured after a request was already decided, and
+ * showing today's config would misattribute who really signed off. Only log
+ * rows that represent a genuine approval action count: an intermediate
+ * level sign-off (pending -> pending, written explicitly by
+ * decideOnPendingRequest/skipCurrentApprover) or the final approval
+ * (pending -> approved, written by the status-change trigger); submission
+ * (draft/none -> pending) and reject/return are excluded since they aren't
+ * "who approved this level". `level` is only populated for logs written
+ * after migration 0026 — already-decided requests from before that won't
+ * populate a column here. Batched across all rows (not one query per row)
+ * since a report can list many requests at once.
  */
 export async function loadApprovalChainsForReport(
   supabase: SupabaseClient<Database>,
-  requests: Pick<LeaveRequest, "id" | "user_id" | "team_id">[]
+  requests: Pick<LeaveRequest, "id">[]
 ): Promise<Map<string, ReportApprovalLevel[]>> {
-  const userIds = Array.from(new Set(requests.map((r) => r.user_id)));
-  const teamIds = Array.from(new Set(requests.map((r) => r.team_id)));
-
-  const [{ data: overrides }, { data: leads }] = await Promise.all([
-    userIds.length > 0
-      ? supabase.from("approver_mappings").select("user_id, approver_id").in("user_id", userIds)
-      : Promise.resolve({ data: [] as { user_id: string; approver_id: string }[] }),
-    teamIds.length > 0
-      ? supabase.from("team_leads").select("team_id, user_id, approval_order").in("team_id", teamIds)
-      : Promise.resolve({ data: [] as { team_id: string; user_id: string; approval_order: number }[] }),
-  ]);
-
-  const approverIds = Array.from(
-    new Set([...(overrides ?? []).map((o) => o.approver_id), ...(leads ?? []).map((l) => l.user_id)])
-  );
-  const { data: approverUsers } =
-    approverIds.length > 0
-      ? await supabase.from("users").select("id, email, nickname").in("id", approverIds)
-      : { data: [] as { id: string; email: string; nickname: string | null }[] };
-  const nameMap = new Map((approverUsers ?? []).map((u) => [u.id, u.nickname || u.email]));
-
-  const overridesByUser = new Map<string, string[]>();
-  for (const o of overrides ?? []) {
-    const name = nameMap.get(o.approver_id);
-    if (!name) continue;
-    const list = overridesByUser.get(o.user_id) ?? [];
-    list.push(name);
-    overridesByUser.set(o.user_id, list);
-  }
-
-  const leadsByTeam = new Map<string, ReportApprovalLevel[]>();
-  for (const l of leads ?? []) {
-    const name = nameMap.get(l.user_id);
-    if (!name) continue;
-    const levels = leadsByTeam.get(l.team_id) ?? [];
-    const existing = levels.find((lv) => lv.level === l.approval_order);
-    if (existing) existing.names.push(name);
-    else levels.push({ level: l.approval_order, names: [name] });
-    leadsByTeam.set(l.team_id, levels);
-  }
-  for (const levels of leadsByTeam.values()) levels.sort((a, b) => a.level - b.level);
-
+  const requestIds = requests.map((r) => r.id);
   const result = new Map<string, ReportApprovalLevel[]>();
+  if (requestIds.length === 0) return result;
+
+  const { data: logs } = await supabase
+    .from("leave_request_logs")
+    .select("request_id, actor_id, level")
+    .in("request_id", requestIds)
+    .not("level", "is", null)
+    .eq("from_status", "pending")
+    .in("to_status", ["pending", "approved"])
+    .order("created_at", { ascending: true });
+
+  const actorIds = Array.from(new Set((logs ?? []).map((l) => l.actor_id).filter((id): id is string => !!id)));
+  const { data: actorUsers } =
+    actorIds.length > 0
+      ? await supabase.from("users").select("id, email, nickname").in("id", actorIds)
+      : { data: [] as { id: string; email: string; nickname: string | null }[] };
+  const nameMap = new Map((actorUsers ?? []).map((u) => [u.id, displayName(u)]));
+
+  const byRequest = new Map<string, ReportApprovalLevel[]>();
+  for (const log of logs ?? []) {
+    if (log.level == null || !log.actor_id) continue;
+    const name = nameMap.get(log.actor_id);
+    if (!name) continue;
+    const levels = byRequest.get(log.request_id) ?? [];
+    const existing = levels.find((lv) => lv.level === log.level);
+    if (existing) {
+      if (!existing.names.includes(name)) existing.names.push(name);
+    } else {
+      levels.push({ level: log.level, names: [name] });
+    }
+    byRequest.set(log.request_id, levels);
+  }
+  for (const levels of byRequest.values()) levels.sort((a, b) => a.level - b.level);
+
   for (const r of requests) {
-    const overrideNames = overridesByUser.get(r.user_id);
-    result.set(r.id, overrideNames && overrideNames.length > 0 ? [{ level: 1, names: overrideNames }] : (leadsByTeam.get(r.team_id) ?? []));
+    result.set(r.id, byRequest.get(r.id) ?? []);
   }
   return result;
 }
@@ -123,7 +122,7 @@ export async function loadReportLookups(
   ]);
 
   return {
-    userMap: new Map((users ?? []).map((u) => [u.id, u.nickname || u.email])),
+    userMap: new Map((users ?? []).map((u) => [u.id, displayName(u)])),
     leaveTypeMap: new Map((leaveTypes ?? []).map((lt) => [lt.id, lt.name])),
     teamMap: new Map((teams ?? []).map((t) => [t.id, t.name])),
   };

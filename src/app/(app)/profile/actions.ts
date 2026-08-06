@@ -24,6 +24,11 @@ export async function updateOwnTeams(formData: FormData) {
   if (!appUser) redirect("/login");
 
   const teamIds = formData.getAll("team_ids").map(String);
+  // Mirrors the client-side guard in TeamMembershipForm — a user can never
+  // save themselves down to zero teams, since that locks them out to
+  // /onboarding/team with no way back in without an admin's help.
+  if (teamIds.length === 0) return;
+
   const supabase = createServerSupabaseClient();
 
   const { data: current } = await supabase.from("user_teams").select("id, team_id").eq("user_id", appUser.id);
@@ -41,9 +46,9 @@ export async function updateOwnTeams(formData: FormData) {
       );
   }
 
-  for (const teamId of teamIds) {
-    if (currentTeamIds.has(teamId)) continue;
-    await supabase.from("user_teams").insert({ user_id: appUser.id, team_id: teamId });
+  const toAdd = teamIds.filter((id) => !currentTeamIds.has(id));
+  if (toAdd.length > 0) {
+    await supabase.from("user_teams").insert(toAdd.map((teamId) => ({ user_id: appUser.id, team_id: teamId })));
   }
 
   revalidatePath("/profile");

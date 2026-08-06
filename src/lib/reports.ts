@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, LeaveRequest, LeaveStatus } from "@/lib/supabase/types";
 import { displayName } from "@/lib/users";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 
 export interface ReportFilters {
   userId?: string;
@@ -54,6 +55,14 @@ export interface ReportApprovalLevel {
  * after migration 0026 — already-decided requests from before that won't
  * populate a column here. Batched across all rows (not one query per row)
  * since a report can list many requests at once.
+ *
+ * Actor names are resolved via the admin client, not the caller's own RLS
+ * scope: the caller is already implicitly authorized to see these people
+ * (they're actors on leave_requests rows the caller's session was allowed to
+ * fetch in the first place), but users_select's live team-membership check
+ * can drift out of sync with that — same root cause already fixed on the
+ * request detail page (commit e918d54) — and a report silently blanking
+ * names is worse here than there, since this is what HR/payroll relies on.
  */
 export async function loadApprovalChainsForReport(
   supabase: SupabaseClient<Database>,
@@ -73,9 +82,10 @@ export async function loadApprovalChainsForReport(
     .order("created_at", { ascending: true });
 
   const actorIds = Array.from(new Set((logs ?? []).map((l) => l.actor_id).filter((id): id is string => !!id)));
+  const admin = createAdminSupabaseClient();
   const { data: actorUsers } =
     actorIds.length > 0
-      ? await supabase.from("users").select("id, email, nickname").in("id", actorIds)
+      ? await admin.from("users").select("id, email, nickname").in("id", actorIds)
       : { data: [] as { id: string; email: string; nickname: string | null }[] };
   const nameMap = new Map((actorUsers ?? []).map((u) => [u.id, displayName(u)]));
 
@@ -101,6 +111,14 @@ export async function loadApprovalChainsForReport(
   return result;
 }
 
+/**
+ * Requester/approver names for a set of already-fetched (RLS-scoped)
+ * requests. Resolved via the admin client rather than the caller's own
+ * users_select scope — same reasoning as loadApprovalChainsForReport above:
+ * the caller is already implicitly authorized to see these people, and
+ * users_select's live team-membership check can drift and blank them out
+ * even though the underlying leave_requests row was fetchable.
+ */
 export async function loadReportLookups(
   supabase: SupabaseClient<Database>,
   requests: Pick<LeaveRequest, "user_id" | "leave_type_id" | "team_id" | "approver_id">[]
@@ -111,9 +129,10 @@ export async function loadReportLookups(
   const leaveTypeIds = Array.from(new Set(requests.map((r) => r.leave_type_id)));
   const teamIds = Array.from(new Set(requests.map((r) => r.team_id)));
 
+  const admin = createAdminSupabaseClient();
   const [{ data: users }, { data: leaveTypes }, { data: teams }] = await Promise.all([
     userIds.length
-      ? supabase.from("users").select("id, email, nickname").in("id", userIds)
+      ? admin.from("users").select("id, email, nickname").in("id", userIds)
       : Promise.resolve({ data: [] as { id: string; email: string; nickname: string | null }[] }),
     leaveTypeIds.length
       ? supabase.from("leave_types").select("id, name").in("id", leaveTypeIds)

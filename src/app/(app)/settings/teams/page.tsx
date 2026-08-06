@@ -25,13 +25,6 @@ export default async function TeamsSettingsPage() {
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4 p-4 pb-24">
       <div>
         <h1 className="text-lg font-semibold text-foreground">จัดการทีมและสายอนุมัติ</h1>
-        <p className="text-sm text-muted-foreground">
-          พิมพ์อีเมล Gmail เพื่อกำหนดหัวหน้าทีมได้เลย ไม่ว่าคนนั้นจะเคยเข้าสู่ระบบแล้วหรือยังไม่เคยก็ตาม (ถ้ายังไม่เคย
-          เข้าระบบ ระบบจะจำสิทธิ์/ทีม/ลำดับไว้ให้อัตโนมัติตอนเขา login ครั้งแรก) — ระบบจะปรับสิทธิ์เป็น
-          &quot;หัวหน้าทีม&quot; ให้อัตโนมัติ หัวหน้าคนเดียวดูแลอนุมัติได้หลายทีมพร้อมกัน (จัดการเพิ่ม/ลดทีมที่ดูแลได้ที่
-          หน้าผู้ใช้งานและสิทธิ์) ถ้าทีมไหนมีหัวหน้าหลายคน คำขอลาของทีมนั้นต้องผ่านการอนุมัติตามลำดับ (ลำดับ 1
-          อนุมัติก่อน จึงส่งต่อลำดับถัดไป) ใช้ลูกศรเพื่อจัดลำดับ
-        </p>
       </div>
 
       <form action={createTeam} className="flex gap-2">

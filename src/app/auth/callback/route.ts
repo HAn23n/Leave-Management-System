@@ -29,7 +29,9 @@ export async function GET(request: NextRequest) {
 
   if (!existing) {
     const admin = createAdminSupabaseClient();
-    const email = authUser.email ?? "";
+    // Lowercased to match how pending_user_roles/pending_team_leads store
+    // (and are looked up by) email everywhere else in the app.
+    const email = (authUser.email ?? "").toLowerCase();
     const [{ data: pendingRole }, { data: pendingTeamLeads }] = await Promise.all([
       admin.from("pending_user_roles").select("*").eq("email", email).maybeSingle(),
       admin.from("pending_team_leads").select("*").eq("email", email).order("created_at"),
@@ -74,22 +76,15 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(teamId ? `${origin}/` : `${origin}/onboarding/team`);
     }
 
-    // role/is_active set explicitly (not left to column defaults) so this
-    // insert satisfies users_insert_self's WITH CHECK regardless of what the
-    // live schema's defaults happen to be.
-    const { error: insertError } = await supabase.from("users").insert({
-      id: authUser.id,
-      email: authUser.email ?? "",
-      role: "user",
-      is_active: true,
-    });
-
-    if (insertError) {
-      console.error("[auth/callback] users insert failed:", insertError);
-      return NextResponse.redirect(`${origin}/login?error=profile_create_failed`);
-    }
-
-    return NextResponse.redirect(`${origin}/onboarding/team`);
+    // No admin ever pre-provisioned this email — this is not a member of
+    // the organization as far as the app is concerned. Anyone with a Google
+    // account could otherwise self-register and immediately see whatever
+    // RLS grants role='user' (their own future leave data, team rosters,
+    // etc.), which is exactly the "data leaking to outsiders" risk this
+    // gate exists to close. Access now requires an admin to add the email
+    // via Settings → ผู้ใช้งาน/ทีม first (pending_user_roles/pending_team_leads).
+    await supabase.auth.signOut();
+    return NextResponse.redirect(`${origin}/login?error=not_provisioned`);
   }
 
   if (!existing.is_active) {

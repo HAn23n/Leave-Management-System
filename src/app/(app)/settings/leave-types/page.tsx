@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ToastForm } from "@/components/toast-form";
 import { createLeaveType, setLeaveTypeActive, setLeaveTypeRequireReason } from "./actions";
 
 export default async function LeaveTypesSettingsPage() {
@@ -14,10 +15,10 @@ export default async function LeaveTypesSettingsPage() {
     <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-4 p-4 pb-24">
       <h1 className="text-lg font-semibold text-foreground">ประเภทการลา</h1>
 
-      <form action={createLeaveType} className="flex gap-2">
+      <ToastForm action={createLeaveType} successTitle="เพิ่มประเภทการลาแล้ว" resetOnSuccess className="flex gap-2">
         <Input name="name" placeholder="ชื่อประเภทการลา" required className="flex-1" />
         <Button type="submit">เพิ่ม</Button>
-      </form>
+      </ToastForm>
 
       <div className="flex flex-col gap-2">
         {(leaveTypes ?? []).map((lt) => (
@@ -30,22 +31,29 @@ export default async function LeaveTypesSettingsPage() {
                   {lt.is_active ? "ใช้งาน" : "ปิดใช้งาน"}
                 </Badge>
               </div>
-              <form action={setLeaveTypeActive}>
+              <ToastForm
+                action={setLeaveTypeActive}
+                successTitle={lt.is_active ? "ปิดใช้งานแล้ว" : "เปิดใช้งานแล้ว"}
+              >
                 <input type="hidden" name="id" value={lt.id} />
                 <input type="hidden" name="is_active" value={(!lt.is_active).toString()} />
                 <Button type="submit" size="sm" variant="outline">
                   {lt.is_active ? "ปิดใช้งาน" : "เปิดใช้งาน"}
                 </Button>
-              </form>
+              </ToastForm>
             </div>
-            <form action={setLeaveTypeRequireReason} className="flex items-center justify-between">
+            <ToastForm
+              action={setLeaveTypeRequireReason}
+              successTitle={lt.require_reason ? "บังคับกรอกเหตุผลแล้ว" : "ยกเลิกการบังคับแล้ว"}
+              className="flex items-center justify-between"
+            >
               <span className="text-sm text-muted-foreground">บังคับกรอกเหตุผล</span>
               <input type="hidden" name="id" value={lt.id} />
               <input type="hidden" name="require_reason" value={(!lt.require_reason).toString()} />
               <Button type="submit" size="sm" variant={lt.require_reason ? "default" : "outline"}>
                 {lt.require_reason ? "บังคับอยู่" : "ไม่บังคับ"}
               </Button>
-            </form>
+            </ToastForm>
           </div>
         ))}
       </div>

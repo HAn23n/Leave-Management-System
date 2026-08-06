@@ -12,12 +12,11 @@ interface TeamOption {
 
 /**
  * A checkbox list submitted via a bound server action, kept as controlled
- * state instead of defaultChecked — "เลือกทั้งหมด" changes the underlying
- * data without the admin having clicked each box themselves, and an
- * uncontrolled input's defaultChecked only applies on mount, so the
- * checkboxes used to keep showing the old state after that action
- * succeeded (only a manual page reload picked it up). "select all" is now
- * just this same save with every team id passed explicitly.
+ * state instead of defaultChecked — an uncontrolled input's defaultChecked
+ * only applies on mount, so after "เลือกทั้งหมด" saved, the checkboxes kept
+ * showing their pre-click state until a manual reload. "เลือกทั้งหมด" only
+ * checks every box locally — it does not save by itself; the admin still
+ * has to press the save button, same as ticking boxes by hand.
  */
 export function TeamChecklist({
   userId,
@@ -47,17 +46,20 @@ export function TeamChecklist({
     });
   }
 
-  function submit(teamIds: string[]) {
+  function save() {
     const formData = new FormData();
     formData.append("id", userId);
-    teamIds.forEach((id) => formData.append("team_ids", id));
+    Array.from(selected).forEach((id) => formData.append("team_ids", id));
 
     startTransition(async () => {
       await action(formData);
-      setSelected(new Set(teamIds));
       toast({ variant: "success", title: successTitle });
       router.refresh();
     });
+  }
+
+  function selectAll() {
+    setSelected(new Set(teams.map((t) => t.id)));
   }
 
   return (
@@ -78,22 +80,10 @@ export function TeamChecklist({
         {teams.length === 0 && <span className="text-sm text-muted-foreground">ยังไม่มีทีมในระบบ</span>}
       </div>
       <div className="flex gap-2">
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          disabled={pending}
-          onClick={() => submit(Array.from(selected))}
-        >
+        <Button type="button" size="sm" variant="outline" disabled={pending} onClick={save}>
           {saveLabel}
         </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          disabled={pending}
-          onClick={() => submit(teams.map((t) => t.id))}
-        >
+        <Button type="button" size="sm" variant="ghost" disabled={pending} onClick={selectAll}>
           เลือกทั้งหมด
         </Button>
       </div>

@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TeamChecklist } from "./team-checklist";
+import { ToastForm } from "@/components/toast-form";
+import { DeleteButton } from "@/components/delete-button";
 import {
   updateUserRole,
   updateMemberTeams,
@@ -48,7 +50,7 @@ export default async function UsersSettingsPage() {
           ต้องเพิ่มอีเมลไว้ที่นี่ก่อน คนนั้นถึงจะเข้าสู่ระบบด้วย Google ได้ (หรือกำหนดเป็นหัวหน้าทีมได้ที่หน้า
           &quot;ทีม&quot; แทน)
         </p>
-        <form action={preProvisionUser} className="mt-3 flex flex-col gap-2">
+        <ToastForm action={preProvisionUser} successTitle="เพิ่มสิทธิ์แล้ว" resetOnSuccess className="mt-3 flex flex-col gap-2">
           <div className="flex flex-wrap items-center gap-2">
             <Input name="email" type="email" placeholder="อีเมล Gmail" required className="h-9 w-56" />
             <Select name="role" defaultValue="user">
@@ -72,7 +74,7 @@ export default async function UsersSettingsPage() {
           <Button type="submit" size="sm" className="self-start">
             เพิ่มสิทธิ์
           </Button>
-        </form>
+        </ToastForm>
 
         {(pendingUsers ?? []).length > 0 && (
           <div className="mt-3 flex flex-col gap-1.5 border-t border-border pt-3">
@@ -86,12 +88,14 @@ export default async function UsersSettingsPage() {
                     {p.email} · {ROLE_LABEL[p.role]}
                     {teamNames.length > 0 && ` · ${teamNames.join(", ")}`} <Badge variant="outline">รอเข้าระบบครั้งแรก</Badge>
                   </span>
-                  <form action={removePendingUser}>
-                    <input type="hidden" name="email" value={p.email} />
-                    <Button type="submit" size="sm" variant="ghost">
-                      ยกเลิก
-                    </Button>
-                  </form>
+                  <DeleteButton
+                    action={removePendingUser}
+                    fields={{ email: p.email }}
+                    confirmTitle="ยกเลิกสิทธิ์ที่เพิ่มไว้ล่วงหน้า?"
+                    confirmDescription={`${p.email} จะเข้าสู่ระบบด้วย Google ไม่ได้จนกว่าจะเพิ่มสิทธิ์ใหม่`}
+                    successTitle="ยกเลิกแล้ว"
+                    label="ยกเลิก"
+                  />
                 </div>
               );
             })}
@@ -117,7 +121,7 @@ export default async function UsersSettingsPage() {
               </div>
 
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <form action={updateUserRole} className="flex items-center gap-2">
+                <ToastForm action={updateUserRole} successTitle="บันทึกสิทธิ์แล้ว" className="flex items-center gap-2">
                   <input type="hidden" name="id" value={u.id} />
                   <Select name="role" defaultValue={u.role}>
                     <SelectTrigger className="h-9 w-40">
@@ -134,15 +138,18 @@ export default async function UsersSettingsPage() {
                   <Button type="submit" size="sm" variant="outline">
                     บันทึกสิทธิ์
                   </Button>
-                </form>
+                </ToastForm>
 
-                <form action={setUserActive}>
+                <ToastForm
+                  action={setUserActive}
+                  successTitle={u.is_active ? "ปิดใช้งานแล้ว" : "เปิดใช้งานแล้ว"}
+                >
                   <input type="hidden" name="id" value={u.id} />
                   <input type="hidden" name="is_active" value={(!u.is_active).toString()} />
                   <Button type="submit" size="sm" variant={u.is_active ? "destructive" : "outline"}>
                     {u.is_active ? "ปิดใช้งานผู้ใช้" : "เปิดใช้งานผู้ใช้"}
                   </Button>
-                </form>
+                </ToastForm>
               </div>
 
               {u.team_id && (

@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { TimeSelect } from "./time-select";
+import { ToastForm } from "@/components/toast-form";
 import { updateAttendanceSettings } from "./actions";
 
 export default async function AttendanceSettingsPage() {
@@ -21,7 +22,7 @@ export default async function AttendanceSettingsPage() {
           <CardTitle>เวลาแจ้งเตือนและชั่วโมงทำงาน</CardTitle>
         </CardHeader>
         <CardContent>
-          <form action={updateAttendanceSettings} className="flex flex-col gap-4">
+          <ToastForm action={updateAttendanceSettings} successTitle="บันทึกแล้ว" className="flex flex-col gap-4">
             <div className="space-y-1.5">
               <Label>เวลาแจ้งเตือนเช็คอิน</Label>
               <TimeSelect
@@ -59,7 +60,7 @@ export default async function AttendanceSettingsPage() {
               />
             </div>
             <Button type="submit">บันทึก</Button>
-          </form>
+          </ToastForm>
         </CardContent>
       </Card>
     </main>

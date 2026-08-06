@@ -2,6 +2,8 @@ import { requireAdmin } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ToastForm } from "@/components/toast-form";
+import { DeleteButton } from "@/components/delete-button";
 import { createApproverMapping, deleteApproverMapping } from "./actions";
 
 export default async function ApproverMappingsSettingsPage() {
@@ -25,7 +27,7 @@ export default async function ApproverMappingsSettingsPage() {
         </p>
       </div>
 
-      <form action={createApproverMapping} className="flex flex-wrap gap-2">
+      <ToastForm action={createApproverMapping} successTitle="เพิ่มสายอนุมัติแล้ว" className="flex flex-wrap gap-2">
         <Select name="user_id" required>
           <SelectTrigger className="flex-1">
             <SelectValue placeholder="เลือกพนักงาน (ผู้ขอ)" />
@@ -51,7 +53,7 @@ export default async function ApproverMappingsSettingsPage() {
           </SelectContent>
         </Select>
         <Button type="submit">เพิ่ม</Button>
-      </form>
+      </ToastForm>
 
       <div className="flex flex-col gap-2">
         {(mappings ?? []).length === 0 && (
@@ -62,12 +64,13 @@ export default async function ApproverMappingsSettingsPage() {
             <span>
               {userMap.get(m.user_id) ?? "-"} → {userMap.get(m.approver_id) ?? "-"}
             </span>
-            <form action={deleteApproverMapping}>
-              <input type="hidden" name="id" value={m.id} />
-              <Button type="submit" size="sm" variant="ghost">
-                ลบ
-              </Button>
-            </form>
+            <DeleteButton
+              action={deleteApproverMapping}
+              fields={{ id: m.id }}
+              confirmTitle="ลบสายอนุมัตินี้?"
+              confirmDescription={`${userMap.get(m.user_id) ?? "-"} จะไม่ส่งคำขอลาไปยัง ${userMap.get(m.approver_id) ?? "-"} อีก`}
+              successTitle="ลบสายอนุมัติแล้ว"
+            />
           </div>
         ))}
       </div>

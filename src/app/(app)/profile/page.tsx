@@ -24,16 +24,16 @@ export default async function ProfilePage() {
           <CardTitle>โปรไฟล์</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-2 text-sm">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">อีเมล</span>
-            <span className="font-medium">{appUser.email}</span>
-          </div>
-          {appUser.nickname && (
+           {appUser.nickname && (
             <div className="flex justify-between">
               <span className="text-muted-foreground">ชื่อเล่น</span>
               <span className="font-medium">{appUser.nickname}</span>
             </div>
           )}
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">อีเมล</span>
+            <span className="font-medium">{appUser.email}</span>
+          </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">สิทธิ์การใช้งาน</span>
             <span className="font-medium">{roleLabel}</span>

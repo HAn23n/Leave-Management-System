@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ChevronUp, ChevronDown } from "lucide-react";
+import { ToastForm } from "@/components/toast-form";
+import { DeleteButton } from "@/components/delete-button";
 import { createTeam, renameTeam, setTeamActive, removeTeamLead, removePendingInvite, moveTeamLead } from "./actions";
 import { AssignTeamLeadForm } from "./assign-team-lead-form";
 
@@ -27,10 +29,10 @@ export default async function TeamsSettingsPage() {
         <h1 className="text-lg font-semibold text-foreground">จัดการทีมและสายอนุมัติ</h1>
       </div>
 
-      <form action={createTeam} className="flex gap-2">
+      <ToastForm action={createTeam} successTitle="เพิ่มทีมแล้ว" resetOnSuccess className="flex gap-2">
         <Input name="name" placeholder="ชื่อทีมใหม่" required />
         <Button type="submit">เพิ่มทีม</Button>
-      </form>
+      </ToastForm>
 
       <div className="flex flex-col gap-3">
         {(teams ?? []).map((team) => {
@@ -47,23 +49,26 @@ export default async function TeamsSettingsPage() {
                   <Badge variant={team.is_active ? "success" : "secondary"}>
                     {team.is_active ? "ใช้งาน" : "ปิดใช้งาน"}
                   </Badge>
-                  <form action={setTeamActive}>
+                  <ToastForm
+                    action={setTeamActive}
+                    successTitle={team.is_active ? "ปิดใช้งานแล้ว" : "เปิดใช้งานแล้ว"}
+                  >
                     <input type="hidden" name="id" value={team.id} />
                     <input type="hidden" name="is_active" value={(!team.is_active).toString()} />
                     <Button type="submit" size="sm" variant="outline">
                       {team.is_active ? "ปิดใช้งาน" : "เปิดใช้งาน"}
                     </Button>
-                  </form>
+                  </ToastForm>
                 </div>
               </CardHeader>
               <CardContent className="flex flex-col gap-2">
-                <form action={renameTeam} className="flex gap-2">
+                <ToastForm action={renameTeam} successTitle="เปลี่ยนชื่อทีมแล้ว" className="flex gap-2">
                   <input type="hidden" name="id" value={team.id} />
                   <Input name="name" defaultValue={team.name} className="h-9 flex-1" />
                   <Button type="submit" size="sm" variant="outline">
                     เปลี่ยนชื่อทีม
                   </Button>
-                </form>
+                </ToastForm>
 
                 <p className="text-sm font-medium text-muted-foreground">หัวหน้าทีม (ตามลำดับอนุมัติ)</p>
                 {leads.length === 0 && <p className="text-sm text-muted-foreground">ยังไม่มีหัวหน้าทีม</p>}
@@ -73,14 +78,14 @@ export default async function TeamsSettingsPage() {
                       ลำดับ {index + 1}: {userMap.get(lead.user_id) ?? "-"}
                     </span>
                     <div className="flex items-center gap-1">
-                      <form action={moveTeamLead}>
+                      <ToastForm action={moveTeamLead} successTitle="ย้ายลำดับแล้ว">
                         <input type="hidden" name="id" value={lead.id} />
                         <input type="hidden" name="direction" value="up" />
                         <Button type="submit" size="sm" variant="ghost" disabled={index === 0} title="ขึ้น">
                           <ChevronUp className="h-4 w-4" />
                         </Button>
-                      </form>
-                      <form action={moveTeamLead}>
+                      </ToastForm>
+                      <ToastForm action={moveTeamLead} successTitle="ย้ายลำดับแล้ว">
                         <input type="hidden" name="id" value={lead.id} />
                         <input type="hidden" name="direction" value="down" />
                         <Button
@@ -92,13 +97,15 @@ export default async function TeamsSettingsPage() {
                         >
                           <ChevronDown className="h-4 w-4" />
                         </Button>
-                      </form>
-                      <form action={removeTeamLead}>
-                        <input type="hidden" name="id" value={lead.id} />
-                        <Button type="submit" size="sm" variant="ghost">
-                          เอาออก
-                        </Button>
-                      </form>
+                      </ToastForm>
+                      <DeleteButton
+                        action={removeTeamLead}
+                        fields={{ id: lead.id }}
+                        confirmTitle="เอาหัวหน้าทีมคนนี้ออก?"
+                        confirmDescription={`${userMap.get(lead.user_id) ?? "-"} จะไม่ได้อยู่ในสายอนุมัติของทีมนี้อีก`}
+                        successTitle="เอาออกแล้ว"
+                        label="เอาออก"
+                      />
                     </div>
                   </div>
                 ))}
@@ -108,12 +115,14 @@ export default async function TeamsSettingsPage() {
                     <span>
                       รอเข้าระบบครั้งแรก: {p.email} <Badge variant="outline">pending</Badge>
                     </span>
-                    <form action={removePendingInvite}>
-                      <input type="hidden" name="id" value={p.id} />
-                      <Button type="submit" size="sm" variant="ghost">
-                        ยกเลิก
-                      </Button>
-                    </form>
+                    <DeleteButton
+                      action={removePendingInvite}
+                      fields={{ id: p.id }}
+                      confirmTitle="ยกเลิกคำเชิญนี้?"
+                      confirmDescription={`${p.email} จะไม่ถูกตั้งเป็นหัวหน้าทีมนี้อัตโนมัติเมื่อเข้าสู่ระบบครั้งแรก`}
+                      successTitle="ยกเลิกคำเชิญแล้ว"
+                      label="ยกเลิก"
+                    />
                   </div>
                 ))}
 

@@ -143,7 +143,7 @@ export function LeaveRequestActions({
               size="sm"
               onClick={() => setNoteAction(noteAction === "skip" ? null : "skip")}
             >
-              ข้ามผู้อนุมัติ (แอดมิน)
+              ข้ามผู้อนุมัติ
             </Button>
           )}
         </>

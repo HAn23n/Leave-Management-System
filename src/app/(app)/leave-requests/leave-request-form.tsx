@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarDatePicker } from "@/components/calendar-date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -45,27 +45,46 @@ export function LeaveRequestForm({
   const holidayMap = useMemo(() => new Map(holidays.map((h) => [h.holiday_date, h.name])), [holidays]);
   const occupiedDates = useMemo(() => buildOccupiedDates(existingLeave), [existingLeave]);
 
-  const [leaveTypeId, setLeaveTypeId] = useState(existing?.leave_type_id ?? leaveTypes[0]?.id ?? "");
-  const [teamId, setTeamId] = useState(existing?.team_id ?? teams[0]?.id ?? "");
-  const [startDate, setStartDate] = useState(existing?.start_date ?? todayIso());
-  const [endDate, setEndDate] = useState(existing?.end_date ?? todayIso());
-  const [startPeriod, setStartPeriod] = useState<LeavePeriodClient>(existing?.start_period ?? "full");
-  const [endPeriod, setEndPeriod] = useState<LeavePeriodClient>(existing?.end_period ?? "full");
-  const [reason, setReason] = useState(existing?.reason ?? "");
+  // Computed once (lazy initializer) and reused as both the starting field
+  // values and the dirty-check baseline below.
+  const [initial] = useState(() => ({
+    leaveTypeId: existing?.leave_type_id ?? leaveTypes[0]?.id ?? "",
+    teamId: existing?.team_id ?? teams[0]?.id ?? "",
+    startDate: existing?.start_date ?? todayIso(),
+    endDate: existing?.end_date ?? todayIso(),
+    startPeriod: existing?.start_period ?? "full",
+    endPeriod: existing?.end_period ?? "full",
+    reason: existing?.reason ?? "",
+  }));
+
+  const [leaveTypeId, setLeaveTypeId] = useState(initial.leaveTypeId);
+  const [teamId, setTeamId] = useState(initial.teamId);
+  const [startDate, setStartDate] = useState(initial.startDate);
+  const [endDate, setEndDate] = useState(initial.endDate);
+  const [startPeriod, setStartPeriod] = useState<LeavePeriodClient>(initial.startPeriod);
+  const [endPeriod, setEndPeriod] = useState<LeavePeriodClient>(initial.endPeriod);
+  const [reason, setReason] = useState(initial.reason);
   const [submitting, setSubmitting] = useState<"draft" | "submit" | "approve" | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [dirty, setDirty] = useState(false);
 
-  // Any field changing after the initial mount marks the form dirty; saving
-  // resets it (see setDirty(false) in the handlers below).
-  const mounted = useRef(false);
-  useEffect(() => {
-    if (mounted.current) {
-      setDirty(true);
-    } else {
-      mounted.current = true;
-    }
-  }, [leaveTypeId, teamId, startDate, endDate, startPeriod, endPeriod, reason]);
+  // Compared against on every render instead of tracked via a "first effect
+  // run" ref flag — React 18 Strict Mode (dev) double-invokes effects, and a
+  // ref flipped by an effect doesn't reset between those two invocations,
+  // so that pattern marked the form dirty on load with zero user input.
+  // Reassigning this after a successful save moves the baseline forward.
+  const baseline = useRef(initial);
+  const dirty =
+    leaveTypeId !== baseline.current.leaveTypeId ||
+    teamId !== baseline.current.teamId ||
+    startDate !== baseline.current.startDate ||
+    endDate !== baseline.current.endDate ||
+    startPeriod !== baseline.current.startPeriod ||
+    endPeriod !== baseline.current.endPeriod ||
+    reason !== baseline.current.reason;
+
+  function resetBaseline() {
+    baseline.current = { leaveTypeId, teamId, startDate, endDate, startPeriod, endPeriod, reason };
+  }
 
   const { confirmOpen, confirmLeave, cancelLeave, navigate } = useUnsavedChangesGuard(dirty && !submitting);
 
@@ -142,7 +161,7 @@ export function LeaveRequestForm({
     const saved = await saveDraftOrUpdate();
     setSubmitting(null);
     if (saved) {
-      setDirty(false);
+      resetBaseline();
       toast({ variant: "success", title: "บันทึกร่างแล้ว" });
       navigate(`/leave-requests/${saved.requestNo}`);
       router.refresh();
@@ -166,7 +185,7 @@ export function LeaveRequestForm({
       toast({ variant: body.error === "db_error" ? "warning" : "destructive", title: "ส่งอนุมัติไม่สำเร็จ", description: message });
       return;
     }
-    setDirty(false);
+    resetBaseline();
     toast({ variant: "success", title: "ส่งอนุมัติแล้ว" });
     navigate(`/leave-requests/${saved.requestNo}`);
     router.refresh();
@@ -189,7 +208,7 @@ export function LeaveRequestForm({
       toast({ variant: body.error === "db_error" ? "warning" : "destructive", title: "บันทึกและอนุมัติไม่สำเร็จ", description: message });
       return;
     }
-    setDirty(false);
+    resetBaseline();
     toast({ variant: "success", title: "บันทึกและอนุมัติแล้ว" });
     navigate(`/leave-requests/${saved.requestNo}`);
     router.refresh();

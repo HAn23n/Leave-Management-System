@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   updateUserRole,
-  updateUserTeam,
+  updateMemberTeams,
+  selectAllMemberTeams,
   updateApprovedTeams,
   selectAllApprovedTeams,
   setUserActive,
@@ -20,12 +21,14 @@ export default async function UsersSettingsPage() {
   await requireAdmin();
   const supabase = createServerSupabaseClient();
 
-  const [{ data: users }, { data: teams }, { data: teamLeads }, { data: pendingUsers }] = await Promise.all([
-    supabase.from("users").select("*").order("email"),
-    supabase.from("teams").select("id, name").eq("is_active", true).order("name"),
-    supabase.from("team_leads").select("user_id, team_id"),
-    supabase.from("pending_user_roles").select("*").order("created_at"),
-  ]);
+  const [{ data: users }, { data: teams }, { data: teamLeads }, { data: userTeams }, { data: pendingUsers }] =
+    await Promise.all([
+      supabase.from("users").select("*").order("email"),
+      supabase.from("teams").select("id, name").eq("is_active", true).order("name"),
+      supabase.from("team_leads").select("user_id, team_id"),
+      supabase.from("user_teams").select("user_id, team_id"),
+      supabase.from("pending_user_roles").select("*").order("created_at"),
+    ]);
 
   const teamMap = new Map((teams ?? []).map((t) => [t.id, t.name]));
 
@@ -93,6 +96,9 @@ export default async function UsersSettingsPage() {
           const approvedTeamIds = new Set(
             (teamLeads ?? []).filter((tl) => tl.user_id === u.id).map((tl) => tl.team_id)
           );
+          const memberTeamIds = new Set(
+            (userTeams ?? []).filter((ut) => ut.user_id === u.id).map((ut) => ut.team_id)
+          );
 
           return (
             <div key={u.id} className="rounded-lg border border-border bg-white p-4">
@@ -126,26 +132,6 @@ export default async function UsersSettingsPage() {
                   </Button>
                 </form>
 
-                <form action={updateUserTeam} className="flex items-center gap-2">
-                  <input type="hidden" name="id" value={u.id} />
-                  <Select name="team_id" defaultValue={u.team_id ?? "none"}>
-                    <SelectTrigger className="h-9 w-40">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">ไม่มีทีม</SelectItem>
-                      {(teams ?? []).map((t) => (
-                        <SelectItem key={t.id} value={t.id}>
-                          {t.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button type="submit" size="sm" variant="outline">
-                    บันทึกทีมหลัก
-                  </Button>
-                </form>
-
                 <form action={setUserActive}>
                   <input type="hidden" name="id" value={u.id} />
                   <input type="hidden" name="is_active" value={(!u.is_active).toString()} />
@@ -160,6 +146,39 @@ export default async function UsersSettingsPage() {
               )}
 
               <div className="mt-3 border-t border-border pt-3">
+                <p className="text-xs font-medium text-muted-foreground">ทีมที่เป็นสมาชิก (เลือกได้หลายทีม)</p>
+                <form action={updateMemberTeams} className="mt-2 flex flex-col gap-2">
+                  <input type="hidden" name="id" value={u.id} />
+                  <div className="flex flex-wrap gap-3">
+                    {(teams ?? []).map((t) => (
+                      <label key={t.id} className="flex items-center gap-1.5 text-sm text-foreground">
+                        <input
+                          type="checkbox"
+                          name="team_ids"
+                          value={t.id}
+                          defaultChecked={memberTeamIds.has(t.id)}
+                          className="h-4 w-4 rounded border-input accent-primary"
+                        />
+                        {t.name}
+                      </label>
+                    ))}
+                    {(teams ?? []).length === 0 && (
+                      <span className="text-sm text-muted-foreground">ยังไม่มีทีมในระบบ</span>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button type="submit" size="sm" variant="outline">
+                      บันทึกทีมที่เป็นสมาชิก
+                    </Button>
+                    <Button type="submit" formAction={selectAllMemberTeams} size="sm" variant="ghost">
+                      เลือกทั้งหมด
+                    </Button>
+                  </div>
+                </form>
+              </div>
+
+              <div className="mt-3 border-t border-border pt-3">
+                <p className="text-xs font-medium text-muted-foreground">ทีมที่ดูแลอนุมัติ (เลือกได้หลายทีม)</p>
                 <form action={updateApprovedTeams} className="mt-2 flex flex-col gap-2">
                   <input type="hidden" name="id" value={u.id} />
                   <div className="flex flex-wrap gap-3">

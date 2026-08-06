@@ -14,6 +14,7 @@ import type { LeaveStatus } from "@/lib/supabase/types";
 interface SearchParams {
   status?: string;
   leave_type_id?: string;
+  team_id?: string;
   from?: string;
   to?: string;
 }
@@ -47,6 +48,26 @@ export default async function LeaveRequestsSearchPage({
   if (searchParams.leave_type_id && searchParams.leave_type_id !== "all") {
     query = query.eq("leave_type_id", searchParams.leave_type_id);
   }
+
+  // A plain member's filter is limited to teams they actually belong to
+  // (RLS would return nothing for any other team anyway); an approver/admin
+  // can filter by any team in the org.
+  let teamOptions: { id: string; name: string }[] = [];
+  if (appUser.role === "user") {
+    const { data: memberships } = await supabase.from("user_teams").select("team_id").eq("user_id", appUser.id);
+    const teamIds = (memberships ?? []).map((m) => m.team_id);
+    if (teamIds.length > 0) {
+      const { data: teams } = await supabase.from("teams").select("id, name").in("id", teamIds).order("name");
+      teamOptions = teams ?? [];
+    }
+  } else {
+    const { data: teams } = await supabase.from("teams").select("id, name").eq("is_active", true).order("name");
+    teamOptions = teams ?? [];
+  }
+  if (searchParams.team_id && teamOptions.some((t) => t.id === searchParams.team_id)) {
+    query = query.eq("team_id", searchParams.team_id);
+  }
+
   if (searchParams.from) {
     query = query.gte("end_date", searchParams.from);
   }
@@ -58,9 +79,7 @@ export default async function LeaveRequestsSearchPage({
     await Promise.all([
       query,
       supabase.from("leave_types").select("id, name, color"),
-      appUser.role === "user"
-        ? Promise.resolve({ data: null })
-        : supabase.from("users").select("id, email"),
+      supabase.from("users").select("id, email"),
       supabase.from("holidays").select("holiday_date, name"),
       appUser.role === "approver"
         ? supabase.from("team_leads").select("team_id, approval_order").eq("user_id", appUser.id)
@@ -123,6 +142,25 @@ export default async function LeaveRequestsSearchPage({
           </Select>
         </div>
 
+        {teamOptions.length > 0 && (
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">ทีม</Label>
+            <Select name="team_id" defaultValue={searchParams.team_id ?? "all"}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">ทุกทีม</SelectItem>
+                {teamOptions.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
         <DateRangeFields
           fromName="from"
           toName="to"
@@ -164,7 +202,7 @@ export default async function LeaveRequestsSearchPage({
               <p className="text-sm text-muted-foreground">
                 {formatThaiDate(r.start_date)} - {formatThaiDate(r.end_date)} ({r.total_days ?? "-"} วัน)
               </p>
-              {appUser.role !== "user" && (
+              {r.user_id !== appUser.id && (
                 <p className="text-xs text-muted-foreground">โดย {userMap.get(r.user_id) ?? "-"}</p>
               )}
               {r.request_no && <p className="text-xs text-muted-foreground">เลขที่ {r.request_no}</p>}

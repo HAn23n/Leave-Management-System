@@ -34,6 +34,13 @@ export interface TeamLead {
   created_at: string;
 }
 
+export interface UserTeam {
+  id: string;
+  user_id: string;
+  team_id: string;
+  created_at: string;
+}
+
 export interface UserTeamLog {
   id: string;
   user_id: string;
@@ -163,6 +170,7 @@ export interface Database {
       teams: Table<Team>;
       users: Table<AppUser>;
       team_leads: Table<TeamLead>;
+      user_teams: Table<UserTeam>;
       user_team_logs: Table<UserTeamLog>;
       approver_mappings: Table<ApproverMapping>;
       pending_user_roles: Table<PendingUserRole>;

@@ -64,6 +64,13 @@ export async function GET(request: NextRequest) {
         return NextResponse.redirect(`${origin}/login?error=profile_create_failed`);
       }
 
+      // team_id above is written directly (service-role, first-ever row) —
+      // sync_user_home_team only reacts to user_teams changes, so the
+      // membership row needs creating explicitly to match.
+      if (teamId) {
+        await admin.from("user_teams").insert({ user_id: authUser.id, team_id: teamId });
+      }
+
       for (const lead of pendingTeamLeads ?? []) {
         await addTeamLead(admin, lead.team_id, authUser.id, lead.approval_order ?? undefined);
       }

@@ -47,7 +47,11 @@ export async function GET(request: NextRequest) {
           next_attempt_at: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
         })
         .eq("id", row.id);
-      giveUp ? gaveUp++ : retried++;
+      if (giveUp) {
+        gaveUp++;
+      } else {
+        retried++;
+      }
     }
   }
 

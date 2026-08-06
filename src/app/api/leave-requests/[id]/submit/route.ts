@@ -1,9 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentAppUser } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { transitionLeaveRequest } from "@/lib/leave-requests";
 import { resolveApprovers, firstApprovalLevel } from "@/lib/approval-chain";
-import { notifyNewLeaveRequest } from "@/lib/email";
+import { sendOrQueueEmail } from "@/lib/email-outbox";
 import { rateLimitResponse } from "@/lib/rate-limit";
 
 // draft/returned -> pending, owner only. Notifies the resolved approver(s).
@@ -61,30 +62,34 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
     return NextResponse.json({ request: requestRow });
   }
 
-  try {
-    const [approvers, { data: leaveType }] = await Promise.all([
-      resolveApprovers({ userId: appUser.id, teamId: requestRow.team_id }),
-      supabase.from("leave_types").select("name").eq("id", requestRow.leave_type_id).single(),
-    ]);
+  const [approvers, { data: leaveType }] = await Promise.all([
+    resolveApprovers({ userId: appUser.id, teamId: requestRow.team_id }),
+    supabase.from("leave_types").select("name").eq("id", requestRow.leave_type_id).single(),
+  ]);
 
-    const requestUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/leave-requests/${requestRow.request_no}`;
-    await Promise.all(
-      approvers.map((approver) =>
-        notifyNewLeaveRequest({
-          approverEmail: approver.email,
-          requesterEmail: appUser.email,
-          requestNo: requestRow.request_no,
-          leaveTypeName: leaveType?.name ?? "",
-          startDate: requestRow.start_date,
-          endDate: requestRow.end_date,
-          totalDays: requestRow.total_days,
-          requestUrl,
-        })
+  const requestUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/leave-requests/${requestRow.request_no}`;
+  const admin = createAdminSupabaseClient();
+  await Promise.all(
+    approvers.map((approver) =>
+      sendOrQueueEmail(
+        admin,
+        {
+          type: "new_request",
+          payload: {
+            approverEmail: approver.email,
+            requesterEmail: appUser.email,
+            requestNo: requestRow.request_no,
+            leaveTypeName: leaveType?.name ?? "",
+            startDate: requestRow.start_date,
+            endDate: requestRow.end_date,
+            totalDays: requestRow.total_days,
+            requestUrl,
+          },
+        },
+        approver.email
       )
-    );
-  } catch {
-    // Notification failure must not roll back or mask the successful submission.
-  }
+    )
+  );
 
   return NextResponse.json({ request: requestRow });
 }

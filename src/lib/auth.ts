@@ -27,8 +27,15 @@ export async function getCurrentAppUser(): Promise<AppUser | null> {
  * - Logged in but no users row yet (shouldn't happen, normally created in
  *   /auth/callback) -> redirect to /login
  * - team_id still null -> redirect to team selection (unless allowNoTeam)
+ * - nickname still null -> redirect to nickname entry (unless allowNoNickname)
+ *   — team is checked first, so a brand-new user lands on team selection
+ *   before nickname; an already-onboarded existing user (team_id already
+ *   set, from before this field existed) is prompted for nickname alone.
  */
-export async function requireAppUser(options?: { allowNoTeam?: boolean }): Promise<AppUser> {
+export async function requireAppUser(options?: {
+  allowNoTeam?: boolean;
+  allowNoNickname?: boolean;
+}): Promise<AppUser> {
   const appUser = await getCurrentAppUser();
 
   if (!appUser) {
@@ -41,6 +48,10 @@ export async function requireAppUser(options?: { allowNoTeam?: boolean }): Promi
 
   if (!appUser.team_id && !options?.allowNoTeam) {
     redirect("/onboarding/team");
+  }
+
+  if (!appUser.nickname && !options?.allowNoNickname) {
+    redirect("/onboarding/nickname");
   }
 
   return appUser;

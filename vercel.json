@@ -4,6 +4,14 @@
     {
       "path": "/api/cron/sync-holidays",
       "schedule": "0 1 1 12 *"
+    },
+    {
+      "path": "/api/cron/retry-emails",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/attendance-reminders",
+      "schedule": "*/10 * * * *"
     }
   ]
 }

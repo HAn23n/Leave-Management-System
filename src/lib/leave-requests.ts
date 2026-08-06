@@ -1,10 +1,10 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AppUser, Database, LeaveRequest, LeaveStatus } from "@/lib/supabase/types";
-import { notifyLeaveDecision, notifyNewLeaveRequest } from "@/lib/email";
 import { resolveApprovalChain } from "@/lib/approval-chain";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { safeDbErrorMessage } from "@/lib/db-error";
+import { sendOrQueueEmail } from "@/lib/email-outbox";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -173,25 +173,30 @@ export async function decideOnPendingRequest({
       note: note ? `อนุมัติลำดับที่ ${current.current_level}: ${note}` : `อนุมัติลำดับที่ ${current.current_level}`,
     });
 
-    try {
+    {
       const [{ data: requester }, { data: leaveType }] = await Promise.all([
         supabase.from("users").select("email").eq("id", current.user_id).single(),
         supabase.from("leave_types").select("name").eq("id", current.leave_type_id).single(),
       ]);
       if (requester) {
-        await notifyNewLeaveRequest({
-          approverEmail: nextLevel.approver.email,
-          requesterEmail: requester.email,
-          requestNo: current.request_no,
-          leaveTypeName: leaveType?.name ?? "",
-          startDate: current.start_date,
-          endDate: current.end_date,
-          totalDays: current.total_days,
-          requestUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/leave-requests/${current.request_no}`,
-        });
+        await sendOrQueueEmail(
+          admin,
+          {
+            type: "new_request",
+            payload: {
+              approverEmail: nextLevel.approver.email,
+              requesterEmail: requester.email,
+              requestNo: current.request_no,
+              leaveTypeName: leaveType?.name ?? "",
+              startDate: current.start_date,
+              endDate: current.end_date,
+              totalDays: current.total_days,
+              requestUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/leave-requests/${current.request_no}`,
+            },
+          },
+          nextLevel.approver.email
+        );
       }
-    } catch {
-      // Non-fatal — see comment above.
     }
 
     return { ok: true, request: data };
@@ -215,27 +220,167 @@ export async function decideOnPendingRequest({
   if (!result.ok) return result;
 
   const requestRow = result.request!;
-  try {
+  {
     const [{ data: requester }, { data: leaveType }] = await Promise.all([
       supabase.from("users").select("email").eq("id", requestRow.user_id).single(),
       supabase.from("leave_types").select("name").eq("id", requestRow.leave_type_id).single(),
     ]);
 
     if (requester) {
-      await notifyLeaveDecision({
-        requesterEmail: requester.email,
-        requestNo: requestRow.request_no,
-        leaveTypeName: leaveType?.name ?? "",
-        startDate: requestRow.start_date,
-        endDate: requestRow.end_date,
-        decision,
-        approverEmail: actor.email,
-        approverNote: note,
-        requestUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/leave-requests/${requestRow.request_no}`,
-      });
+      await sendOrQueueEmail(
+        createAdminSupabaseClient(),
+        {
+          type: "decision",
+          payload: {
+            requesterEmail: requester.email,
+            requestNo: requestRow.request_no,
+            leaveTypeName: leaveType?.name ?? "",
+            startDate: requestRow.start_date,
+            endDate: requestRow.end_date,
+            decision,
+            approverEmail: actor.email,
+            approverNote: note,
+            requestUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/leave-requests/${requestRow.request_no}`,
+          },
+        },
+        requester.email
+      );
     }
-  } catch {
-    // Non-fatal — see comment above.
+  }
+
+  return result;
+}
+
+/**
+ * Admin-only escape hatch for when the assigned approver at the current
+ * level is unavailable (out sick, left the company, etc.) — advances the
+ * chain past them without requiring their action, same as if they'd
+ * approved, but logged distinctly as an admin skip rather than a genuine
+ * approval. If there's no next level (last level, or an override chain's
+ * single approver), skipping finalizes the request as approved.
+ */
+export async function skipCurrentApprover({
+  supabase,
+  id,
+  actor,
+  note,
+}: {
+  supabase: SupabaseClient<Database>;
+  id: string;
+  actor: AppUser;
+  note: string | null;
+}): Promise<TransitionResult> {
+  if (actor.role !== "admin") {
+    return { ok: false, reason: "forbidden", message: "เฉพาะ admin เท่านั้นที่ข้ามผู้อนุมัติได้" };
+  }
+
+  const { data: current } = await supabase
+    .from("leave_requests")
+    .select("id, status, team_id, user_id, current_level, leave_type_id, start_date, end_date, request_no, total_days")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!current) return { ok: false, reason: "not_found" };
+  if (current.status !== "pending") return { ok: false, reason: "conflict" };
+
+  const chain = await resolveApprovalChain({ userId: current.user_id, teamId: current.team_id });
+  const nextLevel = chain.type === "chain" ? chain.levels.find((l) => l.level > current.current_level) : undefined;
+  const skipNote = note ? `ข้ามผู้อนุมัติโดยแอดมิน: ${note}` : "ข้ามผู้อนุมัติโดยแอดมิน";
+
+  if (nextLevel) {
+    const { data, error } = await supabase
+      .from("leave_requests")
+      .update({ current_level: nextLevel.level, approver_id: actor.id, approver_note: skipNote })
+      .eq("id", id)
+      .eq("status", "pending")
+      .eq("current_level", current.current_level)
+      .select("*")
+      .maybeSingle();
+
+    if (error) return { ok: false, reason: "db_error", message: safeDbErrorMessage(error) };
+    if (!data) return { ok: false, reason: "conflict" };
+
+    // Status stays 'pending' throughout, so the auto-log trigger (which only
+    // fires on a status change) won't record this step — insert it directly,
+    // same as the normal intermediate-approval path above.
+    const admin = createAdminSupabaseClient();
+    await admin.from("leave_request_logs").insert({
+      request_id: id,
+      actor_id: actor.id,
+      from_status: "pending",
+      to_status: "pending",
+      note: skipNote,
+    });
+
+    {
+      const [{ data: requester }, { data: leaveType }] = await Promise.all([
+        supabase.from("users").select("email").eq("id", current.user_id).single(),
+        supabase.from("leave_types").select("name").eq("id", current.leave_type_id).single(),
+      ]);
+      if (requester) {
+        await sendOrQueueEmail(
+          admin,
+          {
+            type: "new_request",
+            payload: {
+              approverEmail: nextLevel.approver.email,
+              requesterEmail: requester.email,
+              requestNo: current.request_no,
+              leaveTypeName: leaveType?.name ?? "",
+              startDate: current.start_date,
+              endDate: current.end_date,
+              totalDays: current.total_days,
+              requestUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/leave-requests/${current.request_no}`,
+            },
+          },
+          nextLevel.approver.email
+        );
+      }
+    }
+
+    return { ok: true, request: data };
+  }
+
+  const result = await transitionLeaveRequest({
+    supabase,
+    id,
+    fromStatuses: ["pending"],
+    toStatus: "approved",
+    approverId: actor.id,
+    approverNote: skipNote,
+  });
+
+  if (!result.ok) return result;
+
+  const requestRow = result.request!;
+  {
+    const { data: requester } = await supabase.from("users").select("email").eq("id", requestRow.user_id).single();
+    const { data: leaveType } = await supabase
+      .from("leave_types")
+      .select("name")
+      .eq("id", requestRow.leave_type_id)
+      .single();
+
+    if (requester) {
+      await sendOrQueueEmail(
+        createAdminSupabaseClient(),
+        {
+          type: "decision",
+          payload: {
+            requesterEmail: requester.email,
+            requestNo: requestRow.request_no,
+            leaveTypeName: leaveType?.name ?? "",
+            startDate: requestRow.start_date,
+            endDate: requestRow.end_date,
+            decision: "approved",
+            approverEmail: actor.email,
+            approverNote: skipNote,
+            requestUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/leave-requests/${requestRow.request_no}`,
+          },
+        },
+        requester.email
+      );
+    }
   }
 
   return result;

@@ -4,7 +4,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { TeamSelectForm } from "./team-select-form";
 
 export default async function SelectTeamPage() {
-  const appUser = await requireAppUser({ allowNoTeam: true });
+  const appUser = await requireAppUser({ allowNoTeam: true, allowNoNickname: true });
 
   if (appUser.team_id) {
     redirect("/");

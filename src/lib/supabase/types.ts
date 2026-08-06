@@ -18,6 +18,7 @@ export interface Team {
 export interface AppUser {
   id: string;
   email: string;
+  nickname: string | null;
   role: UserRole;
   team_id: string | null;
   is_active: boolean;
@@ -112,6 +113,39 @@ export interface LeaveRequestLog {
   created_at: string;
 }
 
+export interface AttendanceLog {
+  id: string;
+  user_id: string;
+  work_date: string;
+  check_in_at: string | null;
+  check_out_at: string | null;
+  created_at: string;
+}
+
+export interface AttendanceSettings {
+  id: number;
+  check_in_reminder_time: string;
+  check_out_reminder_time: string;
+  standard_work_hours: number;
+  break_hours: number;
+  last_check_in_reminder_date: string | null;
+  last_check_out_reminder_date: string | null;
+  updated_at: string;
+}
+
+export interface EmailOutbox {
+  id: string;
+  type: "new_request" | "decision";
+  to_email: string;
+  payload: Record<string, unknown>;
+  status: "pending" | "sent" | "failed";
+  attempts: number;
+  last_error: string | null;
+  next_attempt_at: string;
+  created_at: string;
+  sent_at: string | null;
+}
+
 // Plain interfaces (no index signature) don't structurally extend
 // Record<string, unknown> under TS's rules. Intersecting with it here satisfies
 // supabase-js's GenericSchema constraint without changing the field types used
@@ -137,6 +171,9 @@ export interface Database {
       holidays: Table<Holiday>;
       leave_requests: Table<LeaveRequest>;
       leave_request_logs: Table<LeaveRequestLog>;
+      email_outbox: Table<EmailOutbox>;
+      attendance_logs: Table<AttendanceLog>;
+      attendance_settings: Table<AttendanceSettings>;
     };
     Views: Record<string, never>;
     Functions: {

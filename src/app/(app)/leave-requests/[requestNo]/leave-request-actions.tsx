@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/hooks/use-toast";
 import type { LeaveStatus, UserRole } from "@/lib/supabase/types";
 
-type NoteAction = "reject" | "return" | null;
+type NoteAction = "reject" | "return" | "skip" | null;
 
 const SUCCESS_TITLE: Record<string, string> = {
   submit: "ส่งอนุมัติแล้ว",
@@ -14,6 +14,19 @@ const SUCCESS_TITLE: Record<string, string> = {
   reject: "ไม่อนุมัติเอกสารแล้ว",
   return: "ส่งคืนเอกสารแล้ว",
   cancel: "ยกเลิกคำขอลาแล้ว",
+  "skip-approver": "ข้ามผู้อนุมัติแล้ว",
+};
+
+const NOTE_ACTION_PATH: Record<Exclude<NoteAction, null>, string> = {
+  reject: "reject",
+  return: "return",
+  skip: "skip-approver",
+};
+
+const NOTE_ACTION_LABEL: Record<Exclude<NoteAction, null>, string> = {
+  reject: "ไม่อนุมัติ",
+  return: "ส่งคืน",
+  skip: "ข้ามผู้อนุมัติ",
 };
 
 export function LeaveRequestActions({
@@ -119,6 +132,20 @@ export function LeaveRequestActions({
               ไม่อนุมัติ
             </Button>
           </div>
+
+          {/* Admin-only escape hatch: hand the current level off to the next
+              approver (or finalize, if there is none) without needing the
+              stuck approver to act — e.g. they're out sick or have left. */}
+          {currentUserRole === "admin" && (
+            <Button
+              disabled={busy}
+              variant="ghost"
+              size="sm"
+              onClick={() => setNoteAction(noteAction === "skip" ? null : "skip")}
+            >
+              ข้ามผู้อนุมัติ (แอดมิน)
+            </Button>
+          )}
         </>
       )}
 
@@ -127,12 +154,21 @@ export function LeaveRequestActions({
           <textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}
-            placeholder={noteAction === "reject" ? "เหตุผลที่ไม่อนุมัติ" : "เหตุผลที่ส่งคืน"}
+            placeholder={
+              noteAction === "reject"
+                ? "เหตุผลที่ไม่อนุมัติ"
+                : noteAction === "return"
+                  ? "เหตุผลที่ส่งคืน"
+                  : "เหตุผล (ไม่บังคับ)"
+            }
             rows={3}
             className="w-full rounded-xl border border-input bg-background px-3 py-2 text-sm"
           />
-          <Button disabled={busy || !note.trim()} onClick={() => post(noteAction, { note })}>
-            ยืนยัน{noteAction === "reject" ? "ไม่อนุมัติ" : "ส่งคืน"}
+          <Button
+            disabled={busy || (noteAction !== "skip" && !note.trim())}
+            onClick={() => post(NOTE_ACTION_PATH[noteAction], { note })}
+          >
+            ยืนยัน{NOTE_ACTION_LABEL[noteAction]}
           </Button>
         </div>
       )}

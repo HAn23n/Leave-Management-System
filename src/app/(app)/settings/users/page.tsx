@@ -99,6 +99,7 @@ export default async function UsersSettingsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="font-medium text-foreground">{u.email}</p>
+                  {u.nickname && <p className="text-xs text-muted-foreground">ชื่อเล่น: {u.nickname}</p>}
                 </div>
                 <Badge variant={u.is_active ? "success" : "secondary"}>
                   {u.is_active ? "ใช้งาน" : "ปิดใช้งาน"}

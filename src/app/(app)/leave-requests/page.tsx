@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DateRangeFields } from "@/components/date-range-fields";
 import { Search } from "lucide-react";
 import type { LeaveStatus } from "@/lib/supabase/types";
+import { displayName } from "@/lib/users";
 
 interface SearchParams {
   status?: string;
@@ -37,6 +38,14 @@ export default async function LeaveRequestsSearchPage({
   // (scoped by team, not status) would otherwise let the row through.
   if (appUser.role === "approver") {
     query = query.neq("status", "draft");
+  }
+
+  // A plain employee only ever sees their own leave records here — team-wide
+  // visibility is an approver/admin thing. RLS (migration 0026) already
+  // enforces this at the DB level; filtering explicitly too keeps the intent
+  // obvious and avoids depending solely on RLS for a page-level guarantee.
+  if (appUser.role === "user") {
+    query = query.eq("user_id", appUser.id);
   }
 
   const statusOptions = (Object.keys(STATUS_LABEL_TH) as LeaveStatus[]).filter(
@@ -87,7 +96,7 @@ export default async function LeaveRequestsSearchPage({
     ]);
 
   const leaveTypeMap = new Map((leaveTypes ?? []).map((lt) => [lt.id, lt]));
-  const userMap = new Map((users ?? []).map((u) => [u.id, u.nickname || u.email]));
+  const userMap = new Map((users ?? []).map((u) => [u.id, displayName(u)]));
   const holidayMap = new Map((holidayRows ?? []).map((h) => [h.holiday_date, h.name]));
   // A pending request whose current_level has already moved past this
   // approver's own chain position means they already acted (approved) on

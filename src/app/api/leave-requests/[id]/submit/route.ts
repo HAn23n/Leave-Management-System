@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { waitUntil } from "@vercel/functions";
 import { getCurrentAppUser } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
@@ -62,33 +63,42 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
     return NextResponse.json({ request: requestRow });
   }
 
-  const [approvers, { data: leaveType }] = await Promise.all([
-    resolveApprovers({ userId: appUser.id, teamId: requestRow.team_id }),
-    supabase.from("leave_types").select("name").eq("id", requestRow.leave_type_id).single(),
-  ]);
+  // Notifying approvers means a live SMTP send (sendOrQueueEmail only falls
+  // back to queueing on failure) — waiting on that here made every submit
+  // feel slow to the user for no benefit to them. waitUntil lets the
+  // response go back immediately while Vercel keeps the function alive long
+  // enough to finish sending in the background.
+  waitUntil(
+    (async () => {
+      const [approvers, { data: leaveType }] = await Promise.all([
+        resolveApprovers({ userId: appUser.id, teamId: requestRow.team_id }),
+        supabase.from("leave_types").select("name").eq("id", requestRow.leave_type_id).single(),
+      ]);
 
-  const requestUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/leave-requests/${requestRow.request_no}`;
-  const admin = createAdminSupabaseClient();
-  await Promise.all(
-    approvers.map((approver) =>
-      sendOrQueueEmail(
-        admin,
-        {
-          type: "new_request",
-          payload: {
-            approverEmail: approver.email,
-            requesterEmail: appUser.email,
-            requestNo: requestRow.request_no,
-            leaveTypeName: leaveType?.name ?? "",
-            startDate: requestRow.start_date,
-            endDate: requestRow.end_date,
-            totalDays: requestRow.total_days,
-            requestUrl,
-          },
-        },
-        approver.email
-      )
-    )
+      const requestUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/leave-requests/${requestRow.request_no}`;
+      const admin = createAdminSupabaseClient();
+      await Promise.all(
+        approvers.map((approver) =>
+          sendOrQueueEmail(
+            admin,
+            {
+              type: "new_request",
+              payload: {
+                approverEmail: approver.email,
+                requesterEmail: appUser.email,
+                requestNo: requestRow.request_no,
+                leaveTypeName: leaveType?.name ?? "",
+                startDate: requestRow.start_date,
+                endDate: requestRow.end_date,
+                totalDays: requestRow.total_days,
+                requestUrl,
+              },
+            },
+            approver.email
+          )
+        )
+      );
+    })()
   );
 
   return NextResponse.json({ request: requestRow });

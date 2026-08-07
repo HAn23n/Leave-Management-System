@@ -5,13 +5,12 @@ import { notifyCheckInReminder, notifyCheckOutReminder } from "@/lib/email";
 import { nowInBangkok, todayIso } from "@/lib/date";
 
 /**
- * Runs every few minutes (see vercel.json) and fires each reminder at most
- * once per day, the first time it observes Bangkok clock time at/after the
- * admin-configured reminder time (attendance_settings) — last_*_reminder_date
- * is the same-day dedupe guard, since this checks far more often than once a
- * day. Reminders are a recurring nudge, not a one-off event to lose, so a
- * transient send failure here is just retried on the next run rather than
- * queued in email_outbox.
+ * Runs once daily at 09:00 Bangkok time (see vercel.json — Vercel Hobby caps
+ * cron jobs at once/day) and fires each reminder if Bangkok clock time is
+ * already at/after the admin-configured reminder time (attendance_settings)
+ * and it hasn't already fired today (last_*_reminder_date). Since this only
+ * runs once a day now, a check_in/check_out_reminder_time set later than
+ * 09:00 won't fire until the following day's run.
  */
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");

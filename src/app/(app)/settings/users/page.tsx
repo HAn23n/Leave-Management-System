@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Search } from "lucide-react";
+import { Search, UserPlus } from "lucide-react";
 import { requireAdmin } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { Badge } from "@/components/ui/badge";
@@ -74,34 +74,53 @@ export default async function UsersSettingsPage({ searchParams }: { searchParams
       <h1 className="text-lg font-semibold text-foreground">ผู้ใช้งานและสิทธิ์</h1>
 
       <div className="rounded-lg border border-border bg-white p-4">
-        <p className="text-sm font-medium text-foreground">เพิ่มสิทธิ์เข้าใช้งานล่วงหน้า</p>
-        <p className="mt-1 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2">
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/15 text-primary">
+            <UserPlus className="h-4 w-4" />
+          </span>
+          <p className="text-sm font-medium text-foreground">เพิ่มสิทธิ์เข้าใช้งานล่วงหน้า</p>
+        </div>
+        <p className="mt-1.5 text-xs text-muted-foreground">
           ต้องเพิ่มอีเมลไว้ที่นี่ก่อน คนนั้นถึงจะเข้าสู่ระบบด้วย Google ได้ — เลือก &quot;หัวหน้าทีม&quot;
-          พร้อมติ๊กทีมที่จะดูแล เพื่อกำหนดเป็นผู้อนุมัติล่วงหน้าได้เลย (หรือทำที่หน้า &quot;ทีม&quot; แทนก็ได้)
+          พร้อมเลือกทีมที่จะดูแล เพื่อกำหนดเป็นผู้อนุมัติล่วงหน้าได้เลย (หรือทำที่หน้า &quot;ทีม&quot; แทนก็ได้)
         </p>
-        <ToastForm action={preProvisionUser} successTitle="เพิ่มสิทธิ์แล้ว" resetOnSuccess className="mt-3 flex flex-col gap-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <Input name="email" type="email" placeholder="อีเมล Gmail" required className="h-9 w-56" />
-            <Select name="role" defaultValue="user">
-              <SelectTrigger className="h-9 w-40">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="user">developer</SelectItem>
-                <SelectItem value="approver">หัวหน้าทีม</SelectItem>
-                <SelectItem value="admin">ผู้ดูแลระบบ</SelectItem>
-              </SelectContent>
-            </Select>
+        <ToastForm action={preProvisionUser} successTitle="เพิ่มสิทธิ์แล้ว" resetOnSuccess className="mt-4 flex flex-col gap-3">
+          <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">อีเมล</label>
+              <Input name="email" type="email" placeholder="name@gmail.com" required className="h-9" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-muted-foreground">สิทธิ์</label>
+              <Select name="role" defaultValue="user">
+                <SelectTrigger className="h-9 w-full sm:w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="user">developer</SelectItem>
+                  <SelectItem value="approver">หัวหน้าทีม</SelectItem>
+                  <SelectItem value="admin">ผู้ดูแลระบบ</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-3">
-            {(teams ?? []).map((t) => (
-              <label key={t.id} className="flex items-center gap-1.5 text-sm text-foreground">
-                <input type="checkbox" name="team_ids" value={t.id} className="h-4 w-4 rounded border-input accent-primary" />
-                {t.name}
-              </label>
-            ))}
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground">ทีม (จำเป็นถ้าเลือก &quot;หัวหน้าทีม&quot;)</label>
+            <div className="flex flex-wrap gap-1.5">
+              {(teams ?? []).map((t) => (
+                <label key={t.id} className="cursor-pointer">
+                  <input type="checkbox" name="team_ids" value={t.id} className="peer sr-only" />
+                  <span className="inline-flex items-center gap-1 rounded-full border border-input bg-background px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/30 peer-checked:border-primary/60 peer-checked:bg-accent peer-checked:text-accent-foreground peer-focus-visible:ring-2 peer-focus-visible:ring-ring">
+                    {t.name}
+                  </span>
+                </label>
+              ))}
+              {(teams ?? []).length === 0 && <span className="text-sm text-muted-foreground">ยังไม่มีทีมในระบบ</span>}
+            </div>
           </div>
-          <Button type="submit" size="sm" className="self-start">
+
+          <Button type="submit" size="sm" className="mt-1 self-start">
             เพิ่มสิทธิ์
           </Button>
         </ToastForm>

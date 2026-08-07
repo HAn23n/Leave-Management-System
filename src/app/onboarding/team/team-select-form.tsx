@@ -12,6 +12,8 @@ interface TeamOption {
   name: string;
 }
 
+const MAX_VISIBLE_TEAMS = 8;
+
 export function TeamSelectForm({ teams }: { teams: TeamOption[] }) {
   const router = useRouter();
   // A person can belong to more than one team from day one (user_teams
@@ -21,6 +23,7 @@ export function TeamSelectForm({ teams }: { teams: TeamOption[] }) {
   const [selected, setSelected] = useState<Set<string>>(new Set(teams[0] ? [teams[0].id] : []));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
 
   function toggle(teamId: string) {
     setSelected((prev) => {
@@ -71,10 +74,8 @@ export function TeamSelectForm({ teams }: { teams: TeamOption[] }) {
         <p className="text-center text-sm text-muted-foreground">ยังไม่มีทีมในระบบ กรุณาติดต่อผู้ดูแลระบบ</p>
       )}
 
-      {/* Capped height + scroll so a large team count grows inside this box
-          instead of pushing the confirm button off-screen. */}
-      <div className="grid max-h-[26rem] grid-cols-2 gap-2.5 overflow-y-auto pr-1">
-        {teams.map((team) => {
+      <div className="grid grid-cols-2 gap-2.5">
+        {(showAll ? teams : teams.slice(0, MAX_VISIBLE_TEAMS)).map((team) => {
           const isSelected = selected.has(team.id);
           return (
             <button
@@ -110,6 +111,16 @@ export function TeamSelectForm({ teams }: { teams: TeamOption[] }) {
           );
         })}
       </div>
+
+      {teams.length > MAX_VISIBLE_TEAMS && (
+        <button
+          type="button"
+          onClick={() => setShowAll((v) => !v)}
+          className="self-center text-xs font-medium text-primary hover:underline"
+        >
+          {showAll ? "แสดงน้อยลง" : `เพิ่มเติม... (+${teams.length - MAX_VISIBLE_TEAMS})`}
+        </button>
+      )}
 
       <p className="text-center text-xs text-muted-foreground">เลือกได้มากกว่า 1 ทีม แล้วปรับเพิ่ม/ลดภายหลังได้ที่หน้าโปรไฟล์</p>
 

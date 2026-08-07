@@ -13,6 +13,8 @@ interface TeamOption {
   name: string;
 }
 
+const MAX_VISIBLE_TEAMS = 8;
+
 /**
  * Self-service team membership — unlike the admin-side TeamChecklist, this
  * one has a floor (can't save down to zero teams, since that locks the user
@@ -34,6 +36,7 @@ export function TeamMembershipForm({
   const [selected, setSelected] = useState<Set<string>>(() => new Set(initialSelected));
   const [pending, startTransition] = useTransition();
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [showAll, setShowAll] = useState(false);
 
   const hasChanges =
     selected.size !== initialSelected.length || initialSelected.some((id) => !selected.has(id));
@@ -76,10 +79,8 @@ export function TeamMembershipForm({
       {teams.length === 0 ? (
         <p className="text-sm text-muted-foreground">ยังไม่มีทีมในระบบ</p>
       ) : (
-        // Capped height + scroll so a large team count (20+) grows inside
-        // this box instead of pushing the rest of the page down indefinitely.
-        <div className="grid max-h-72 grid-cols-2 gap-2.5 overflow-y-auto pr-1 sm:grid-cols-3 md:grid-cols-4">
-          {teams.map((t) => {
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4">
+          {(showAll ? teams : teams.slice(0, MAX_VISIBLE_TEAMS)).map((t) => {
             const isSelected = selected.has(t.id);
             return (
               <button
@@ -117,11 +118,22 @@ export function TeamMembershipForm({
           })}
         </div>
       )}
+
+      {teams.length > MAX_VISIBLE_TEAMS && (
+        <button
+          type="button"
+          onClick={() => setShowAll((v) => !v)}
+          className="self-center text-xs font-medium text-primary hover:underline"
+        >
+          {showAll ? "แสดงน้อยลง" : `เพิ่มเติม... (+${teams.length - MAX_VISIBLE_TEAMS})`}
+        </button>
+      )}
+
       <Button
         type="button"
         size="sm"
         variant={hasChanges ? "default" : "outline"}
-        className="self-start"
+        className="self-center"
         disabled={pending || !hasChanges}
         onClick={handleSaveClick}
       >

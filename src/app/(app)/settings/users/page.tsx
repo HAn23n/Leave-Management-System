@@ -168,7 +168,6 @@ export default async function UsersSettingsPage({ searchParams }: { searchParams
           teams={teams ?? []}
           teamLeads={teamLeads ?? []}
           userTeams={userTeams ?? []}
-          teamMap={teamMap}
         />
       )}
 

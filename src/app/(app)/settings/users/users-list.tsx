@@ -25,29 +25,23 @@ export function UsersList({
   teams,
   teamLeads,
   userTeams,
-  teamMap,
 }: {
   users: AppUser[];
   teams: TeamOption[];
   teamLeads: { user_id: string; team_id: string }[];
   userTeams: { user_id: string; team_id: string }[];
-  teamMap: Map<string, string>;
 }) {
   return (
     <div className="flex flex-col gap-3">
-      {users.map((u) => {
-        const memberTeamIds = userTeams.filter((ut) => ut.user_id === u.id).map((ut) => ut.team_id);
-        return (
-          <UserCard
-            key={u.id}
-            user={u}
-            teams={teams}
-            approvedTeamIds={teamLeads.filter((tl) => tl.user_id === u.id).map((tl) => tl.team_id)}
-            memberTeamIds={memberTeamIds}
-            memberTeamNames={memberTeamIds.map((id) => teamMap.get(id) ?? "-")}
-          />
-        );
-      })}
+      {users.map((u) => (
+        <UserCard
+          key={u.id}
+          user={u}
+          teams={teams}
+          approvedTeamIds={teamLeads.filter((tl) => tl.user_id === u.id).map((tl) => tl.team_id)}
+          memberTeamIds={userTeams.filter((ut) => ut.user_id === u.id).map((ut) => ut.team_id)}
+        />
+      ))}
     </div>
   );
 }
@@ -61,13 +55,11 @@ function UserCard({
   teams,
   approvedTeamIds: initialApprovedTeamIds,
   memberTeamIds: initialMemberTeamIds,
-  memberTeamNames,
 }: {
   user: AppUser;
   teams: TeamOption[];
   approvedTeamIds: string[];
   memberTeamIds: string[];
-  memberTeamNames: string[];
 }) {
   const router = useRouter();
   const [expanded, setExpanded] = useState(false);
@@ -150,7 +142,6 @@ function UserCard({
           <p className="truncate text-xs text-muted-foreground">
             {u.nickname && `${u.nickname} · `}
             {ROLE_LABEL[u.role]}
-            {memberTeamNames.length > 0 && ` · ${memberTeamNames.join(", ")}`}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">

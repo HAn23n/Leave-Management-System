@@ -178,6 +178,12 @@ export async function resolveAttendanceRoster(
   teamId?: string
 ): Promise<RosterUser[]> {
   if (userId && userId !== "all") {
+    // A plain user's own id never appears in `teamUsers` (that list is only
+    // fetched for approvers) — resolve self from `appUser` directly instead
+    // of falling through to the "-" placeholder below.
+    if (userId === appUser.id) {
+      return [{ id: appUser.id, email: appUser.email, nickname: appUser.nickname }];
+    }
     const chosen = (teamUsers ?? []).find((u) => u.id === userId);
     return chosen ? [chosen] : [{ id: userId, email: "-", nickname: null }];
   }

@@ -88,7 +88,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
     return (
       <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 p-4 pb-24">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-foreground">สวัสดี, {appUser.email}</h1>
+          <h1 className="text-xl font-bold tracking-tight text-foreground">สวัสดี, {displayName(appUser)}</h1>
           <p className="text-sm text-muted-foreground">คำขอรออนุมัติของทีม</p>
         </div>
 
@@ -183,7 +183,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: { 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 p-4 pb-24">
       <div>
-        <h1 className="text-xl font-bold tracking-tight text-foreground">สวัสดี, {appUser.email}</h1>
+        <h1 className="text-xl font-bold tracking-tight text-foreground">สวัสดี, {displayName(appUser)}</h1>
         <p className="text-sm text-muted-foreground">สรุปคำขอลาของฉัน</p>
       </div>
 

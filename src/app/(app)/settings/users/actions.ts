@@ -106,14 +106,19 @@ export async function setUserActive(formData: FormData) {
   revalidatePath("/settings/users");
 }
 
-const PROVISIONABLE_ROLES: UserRole[] = ["admin", "user"];
+const PROVISIONABLE_ROLES: UserRole[] = ["admin", "approver", "user"];
 
 /**
  * Grants an email access to the app ahead of their first Google login.
  * First login is now gated on being pre-provisioned (see
  * src/app/auth/callback/route.ts) — anyone not added here (or as a team
  * lead via Settings → ทีม) can sign in with Google but is turned away, so
- * this is the only way a plain (non-approver) account gets in.
+ * this is the only way a plain (non-approver) account gets in. role='approver'
+ * requires at least one team checked (an approver needs a chain to lead);
+ * that team assignment goes through team_leads/pending_team_leads (same as
+ * Settings → ทีม's per-team assign-by-email flow) rather than
+ * user_teams/pending_user_teams, since a lead's role/membership both follow
+ * from being in the chain, not from being pre-set directly.
  */
 export async function preProvisionUser(formData: FormData) {
   await requireAdmin();
@@ -123,26 +128,51 @@ export async function preProvisionUser(formData: FormData) {
   const role = String(formData.get("role") ?? "user");
   const teamIds = formData.getAll("team_ids").map(String);
   if (!email || !PROVISIONABLE_ROLES.includes(role as UserRole)) return;
+  if (role === "approver" && teamIds.length === 0) return;
 
   const supabase = createServerSupabaseClient();
   const { data: existingUser } = await supabase.from("users").select("id").eq("email", email).maybeSingle();
 
   if (existingUser) {
-    // Already signed in before — apply directly instead of queueing. This
-    // form only grants/adds access, so team selection here is additive —
-    // it never removes a team they already belong to (unlike the per-user
-    // "ทีมที่เป็นสมาชิก" checklist below, which reconciles to exactly what's
-    // checked). Membership goes through user_teams (users.team_id just
-    // follows along — see sync_user_home_team, migration 0023).
-    await supabase.from("users").update({ role: role as UserRole }).eq("id", existingUser.id);
-    if (teamIds.length > 0) {
+    if (role === "approver") {
+      // Role follows automatically once team_leads exists (trg_team_leads_sync_role,
+      // migration 0018) — no direct role update needed here. addTeamLead runs
+      // one team at a time (needs to compute each new lead's approval_order
+      // in sequence); a lead is always also upserted as a member.
       await supabase
         .from("user_teams")
         .upsert(
           teamIds.map((teamId) => ({ user_id: existingUser.id, team_id: teamId })),
           { onConflict: "user_id,team_id", ignoreDuplicates: true }
         );
+      for (const teamId of teamIds) {
+        await addTeamLead(supabase, teamId, existingUser.id);
+      }
+    } else {
+      // Already signed in before — apply directly instead of queueing. This
+      // form only grants/adds access, so team selection here is additive —
+      // it never removes a team they already belong to (unlike the per-user
+      // "ทีมที่เป็นสมาชิก" checklist below, which reconciles to exactly what's
+      // checked). Membership goes through user_teams (users.team_id just
+      // follows along — see sync_user_home_team, migration 0023).
+      await supabase.from("users").update({ role: role as UserRole }).eq("id", existingUser.id);
+      if (teamIds.length > 0) {
+        await supabase
+          .from("user_teams")
+          .upsert(
+            teamIds.map((teamId) => ({ user_id: existingUser.id, team_id: teamId })),
+            { onConflict: "user_id,team_id", ignoreDuplicates: true }
+          );
+      }
     }
+  } else if (role === "approver") {
+    await supabase.from("pending_user_roles").upsert({ email, role: "approver" }, { onConflict: "email" });
+    await supabase
+      .from("pending_team_leads")
+      .upsert(
+        teamIds.map((teamId) => ({ email, team_id: teamId, approval_order: null })),
+        { onConflict: "email,team_id" }
+      );
   } else {
     await supabase.from("pending_user_roles").upsert({ email, role: role as UserRole }, { onConflict: "email" });
     if (teamIds.length > 0) {
@@ -156,6 +186,7 @@ export async function preProvisionUser(formData: FormData) {
   }
 
   revalidatePath("/settings/users");
+  revalidatePath("/settings/teams");
 }
 
 export async function removePendingUser(formData: FormData) {
@@ -166,6 +197,8 @@ export async function removePendingUser(formData: FormData) {
   await Promise.all([
     supabase.from("pending_user_roles").delete().eq("email", email),
     supabase.from("pending_user_teams").delete().eq("email", email),
+    supabase.from("pending_team_leads").delete().eq("email", email),
   ]);
   revalidatePath("/settings/users");
+  revalidatePath("/settings/teams");
 }

@@ -39,12 +39,13 @@ export default async function UsersSettingsPage({ searchParams }: { searchParams
     usersQuery = usersQuery.or(`email.ilike.%${escaped}%,nickname.ilike.%${escaped}%`);
   }
 
-  const [{ data: users, count }, { data: teams }, { data: pendingUsers }, { data: pendingUserTeams }] =
+  const [{ data: users, count }, { data: teams }, { data: pendingUsers }, { data: pendingUserTeams }, { data: pendingTeamLeads }] =
     await Promise.all([
       usersQuery,
       supabase.from("teams").select("id, name").eq("is_active", true).order("name"),
       supabase.from("pending_user_roles").select("*").order("created_at"),
       supabase.from("pending_user_teams").select("*"),
+      supabase.from("pending_team_leads").select("*"),
     ]);
 
   const pageUserIds = (users ?? []).map((u) => u.id);
@@ -75,8 +76,8 @@ export default async function UsersSettingsPage({ searchParams }: { searchParams
       <div className="rounded-lg border border-border bg-white p-4">
         <p className="text-sm font-medium text-foreground">เพิ่มสิทธิ์เข้าใช้งานล่วงหน้า</p>
         <p className="mt-1 text-xs text-muted-foreground">
-          ต้องเพิ่มอีเมลไว้ที่นี่ก่อน คนนั้นถึงจะเข้าสู่ระบบด้วย Google ได้ (หรือกำหนดเป็นหัวหน้าทีมได้ที่หน้า
-          &quot;ทีม&quot; แทน)
+          ต้องเพิ่มอีเมลไว้ที่นี่ก่อน คนนั้นถึงจะเข้าสู่ระบบด้วย Google ได้ — เลือก &quot;หัวหน้าทีม&quot;
+          พร้อมติ๊กทีมที่จะดูแล เพื่อกำหนดเป็นผู้อนุมัติล่วงหน้าได้เลย (หรือทำที่หน้า &quot;ทีม&quot; แทนก็ได้)
         </p>
         <ToastForm action={preProvisionUser} successTitle="เพิ่มสิทธิ์แล้ว" resetOnSuccess className="mt-3 flex flex-col gap-2">
           <div className="flex flex-wrap items-center gap-2">
@@ -87,6 +88,7 @@ export default async function UsersSettingsPage({ searchParams }: { searchParams
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="user">developer</SelectItem>
+                <SelectItem value="approver">หัวหน้าทีม</SelectItem>
                 <SelectItem value="admin">ผู้ดูแลระบบ</SelectItem>
               </SelectContent>
             </Select>
@@ -107,9 +109,12 @@ export default async function UsersSettingsPage({ searchParams }: { searchParams
         {(pendingUsers ?? []).length > 0 && (
           <div className="mt-3 flex flex-col gap-1.5 border-t border-border pt-3">
             {(pendingUsers ?? []).map((p) => {
-              const teamNames = (pendingUserTeams ?? [])
-                .filter((pt) => pt.email === p.email)
-                .map((pt) => teamMap.get(pt.team_id) ?? "-");
+              const teamNames = [
+                ...(pendingUserTeams ?? []).filter((pt) => pt.email === p.email).map((pt) => teamMap.get(pt.team_id) ?? "-"),
+                ...(pendingTeamLeads ?? [])
+                  .filter((pt) => pt.email === p.email)
+                  .map((pt) => `${teamMap.get(pt.team_id) ?? "-"} (หัวหน้า)`),
+              ];
               return (
                 <div key={p.email} className="flex items-center justify-between text-sm text-muted-foreground">
                   <span>
@@ -148,7 +153,11 @@ export default async function UsersSettingsPage({ searchParams }: { searchParams
         />
       )}
 
-      {totalPages > 1 && (
+      {/* Always shown once there's at least one result — even at page 1/1,
+          this tells the admin "that's everything" (ทั้งหมด N คน) instead of
+          silently capping the list at PAGE_SIZE with no indication that
+          there could be more. */}
+      {(count ?? 0) > 0 && (
         <div className="flex items-center justify-center gap-3 text-sm">
           {page > 1 ? (
             <Link href={pageHref(page - 1)} className="font-medium text-primary hover:underline">
@@ -158,7 +167,7 @@ export default async function UsersSettingsPage({ searchParams }: { searchParams
             <span className="text-muted-foreground">ก่อนหน้า</span>
           )}
           <span className="text-muted-foreground">
-            หน้า {page} / {totalPages}
+            หน้า {page} / {totalPages} · ทั้งหมด {count} คน
           </span>
           {page < totalPages ? (
             <Link href={pageHref(page + 1)} className="font-medium text-primary hover:underline">

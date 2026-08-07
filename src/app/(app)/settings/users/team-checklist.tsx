@@ -1,10 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 interface TeamOption {
@@ -13,60 +10,24 @@ interface TeamOption {
 }
 
 /**
- * Pill-chip toggles submitted via a bound server action, kept as controlled
- * state instead of defaultChecked — an uncontrolled input's defaultChecked
- * only applies on mount, so after "เลือกทั้งหมด" saved, the checkboxes kept
- * showing their pre-click state until a manual reload. "เลือกทั้งหมด" only
- * checks every box locally — it does not save by itself; the admin still
- * has to press the save button, same as toggling chips by hand. Rendered
- * twice per user (member teams + approver teams), so this is deliberately
- * compact rather than the larger card grid used on the profile/onboarding
- * pickers — that scale would make an already-expanded user row feel huge.
+ * Pure pill-chip toggle list — no state or save button of its own. Saving is
+ * consolidated one level up (UserCard) into a single button that covers
+ * role + both team checklists at once, since three separate save buttons per
+ * user row read as confusing ("which one do I need to click?").
  */
 export function TeamChecklist({
-  userId,
   teams,
-  initialSelected,
-  action,
-  saveLabel,
-  successTitle,
+  selected,
+  onToggle,
+  onSelectAll,
+  disabled,
 }: {
-  userId: string;
   teams: TeamOption[];
-  initialSelected: string[];
-  action: (formData: FormData) => Promise<void>;
-  saveLabel: string;
-  successTitle: string;
+  selected: Set<string>;
+  onToggle: (teamId: string) => void;
+  onSelectAll: () => void;
+  disabled?: boolean;
 }) {
-  const router = useRouter();
-  const [selected, setSelected] = useState<Set<string>>(() => new Set(initialSelected));
-  const [pending, startTransition] = useTransition();
-
-  function toggle(teamId: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(teamId)) next.delete(teamId);
-      else next.add(teamId);
-      return next;
-    });
-  }
-
-  function save() {
-    const formData = new FormData();
-    formData.append("id", userId);
-    Array.from(selected).forEach((id) => formData.append("team_ids", id));
-
-    startTransition(async () => {
-      await action(formData);
-      toast({ variant: "success", title: successTitle });
-      router.refresh();
-    });
-  }
-
-  function selectAll() {
-    setSelected(new Set(teams.map((t) => t.id)));
-  }
-
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap gap-1.5">
@@ -76,8 +37,8 @@ export function TeamChecklist({
             <button
               key={t.id}
               type="button"
-              onClick={() => toggle(t.id)}
-              disabled={pending}
+              onClick={() => onToggle(t.id)}
+              disabled={disabled}
               aria-pressed={isSelected}
               className={cn(
                 "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition-colors disabled:pointer-events-none disabled:opacity-50",
@@ -93,14 +54,11 @@ export function TeamChecklist({
         })}
         {teams.length === 0 && <span className="text-sm text-muted-foreground">ยังไม่มีทีมในระบบ</span>}
       </div>
-      <div className="flex gap-2">
-        <Button type="button" size="sm" variant="outline" disabled={pending} onClick={save}>
-          {saveLabel}
-        </Button>
-        <Button type="button" size="sm" variant="ghost" disabled={pending} onClick={selectAll}>
+      {teams.length > 0 && (
+        <Button type="button" size="sm" variant="ghost" className="self-start" disabled={disabled} onClick={onSelectAll}>
           เลือกทั้งหมด
         </Button>
-      </div>
+      )}
     </div>
   );
 }

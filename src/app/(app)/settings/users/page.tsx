@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { Search } from "lucide-react";
 import { requireAdmin } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { Badge } from "@/components/ui/badge";
@@ -11,27 +13,60 @@ import { preProvisionUser, removePendingUser } from "./actions";
 
 const ROLE_LABEL = { admin: "ผู้ดูแลระบบ", approver: "หัวหน้าทีม", user: "developer" } as const;
 
-export default async function UsersSettingsPage() {
+const PAGE_SIZE = 5;
+
+interface SearchParams {
+  q?: string;
+  page?: string;
+}
+
+export default async function UsersSettingsPage({ searchParams }: { searchParams: SearchParams }) {
   await requireAdmin();
   const supabase = createServerSupabaseClient();
 
-  const [
-    { data: users },
-    { data: teams },
-    { data: teamLeads },
-    { data: userTeams },
-    { data: pendingUsers },
-    { data: pendingUserTeams },
-  ] = await Promise.all([
-    supabase.from("users").select("*").order("email"),
-    supabase.from("teams").select("id, name").eq("is_active", true).order("name"),
-    supabase.from("team_leads").select("user_id, team_id"),
-    supabase.from("user_teams").select("user_id, team_id"),
-    supabase.from("pending_user_roles").select("*").order("created_at"),
-    supabase.from("pending_user_teams").select("*"),
+  const q = (searchParams.q ?? "").trim();
+  const page = Math.max(1, Number(searchParams.page) || 1);
+  const from = (page - 1) * PAGE_SIZE;
+  const to = from + PAGE_SIZE - 1;
+
+  // Search + pagination happen server-side (range()) so a page load only
+  // ever fetches PAGE_SIZE users and their team memberships, not the whole
+  // org — the earlier version loaded every user's full team_leads/user_teams
+  // rows up front regardless of how many were ever shown.
+  let usersQuery = supabase.from("users").select("*", { count: "exact" }).order("email").range(from, to);
+  if (q) {
+    const escaped = q.replace(/[%_]/g, (c) => `\\${c}`);
+    usersQuery = usersQuery.or(`email.ilike.%${escaped}%,nickname.ilike.%${escaped}%`);
+  }
+
+  const [{ data: users, count }, { data: teams }, { data: pendingUsers }, { data: pendingUserTeams }] =
+    await Promise.all([
+      usersQuery,
+      supabase.from("teams").select("id, name").eq("is_active", true).order("name"),
+      supabase.from("pending_user_roles").select("*").order("created_at"),
+      supabase.from("pending_user_teams").select("*"),
+    ]);
+
+  const pageUserIds = (users ?? []).map((u) => u.id);
+  const [{ data: teamLeads }, { data: userTeams }] = await Promise.all([
+    pageUserIds.length > 0
+      ? supabase.from("team_leads").select("user_id, team_id").in("user_id", pageUserIds)
+      : Promise.resolve({ data: [] as { user_id: string; team_id: string }[] }),
+    pageUserIds.length > 0
+      ? supabase.from("user_teams").select("user_id, team_id").in("user_id", pageUserIds)
+      : Promise.resolve({ data: [] as { user_id: string; team_id: string }[] }),
   ]);
 
   const teamMap = new Map((teams ?? []).map((t) => [t.id, t.name]));
+  const totalPages = Math.max(1, Math.ceil((count ?? 0) / PAGE_SIZE));
+
+  function pageHref(p: number) {
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (p > 1) params.set("page", String(p));
+    const qs = params.toString();
+    return qs ? `/settings/users?${qs}` : "/settings/users";
+  }
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-4 p-4 pb-24">
@@ -96,13 +131,44 @@ export default async function UsersSettingsPage() {
         )}
       </div>
 
-      <UsersList
-        users={users ?? []}
-        teams={teams ?? []}
-        teamLeads={teamLeads ?? []}
-        userTeams={userTeams ?? []}
-        teamMap={teamMap}
-      />
+      <form method="get" className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input name="q" defaultValue={q} placeholder="ค้นหาด้วยอีเมลหรือชื่อเล่น" className="pl-9" />
+      </form>
+
+      {(users ?? []).length === 0 ? (
+        <p className="py-6 text-center text-sm text-muted-foreground">ไม่พบผู้ใช้งานที่ตรงกับการค้นหา</p>
+      ) : (
+        <UsersList
+          users={users ?? []}
+          teams={teams ?? []}
+          teamLeads={teamLeads ?? []}
+          userTeams={userTeams ?? []}
+          teamMap={teamMap}
+        />
+      )}
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-3 text-sm">
+          {page > 1 ? (
+            <Link href={pageHref(page - 1)} className="font-medium text-primary hover:underline">
+              ก่อนหน้า
+            </Link>
+          ) : (
+            <span className="text-muted-foreground">ก่อนหน้า</span>
+          )}
+          <span className="text-muted-foreground">
+            หน้า {page} / {totalPages}
+          </span>
+          {page < totalPages ? (
+            <Link href={pageHref(page + 1)} className="font-medium text-primary hover:underline">
+              ถัดไป
+            </Link>
+          ) : (
+            <span className="text-muted-foreground">ถัดไป</span>
+          )}
+        </div>
+      )}
     </main>
   );
 }

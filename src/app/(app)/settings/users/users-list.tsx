@@ -1,16 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { ChevronDown, Search } from "lucide-react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { ChevronDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ToastForm } from "@/components/toast-form";
+import { toast } from "@/hooks/use-toast";
 import { TeamChecklist } from "./team-checklist";
 import { updateUserRole, updateMemberTeams, updateApprovedTeams, setUserActive } from "./actions";
 import { cn } from "@/lib/utils";
-import type { AppUser } from "@/lib/supabase/types";
+import type { AppUser, UserRole } from "@/lib/supabase/types";
 
 const ROLE_LABEL = { admin: "ผู้ดูแลระบบ", approver: "หัวหน้าทีม", user: "developer" } as const;
 
@@ -19,13 +19,7 @@ interface TeamOption {
   name: string;
 }
 
-/**
- * Each row is collapsed by default (email/nickname/role/status only) and
- * expands to the full edit controls on click — with dozens of users, always
- * rendering every checklist open made this page unusably long. A search box
- * filters by email/nickname so a specific person doesn't need scrolling to
- * find.
- */
+/** One page's worth of user cards — search/pagination happen server-side (see page.tsx). */
 export function UsersList({
   users,
   teams,
@@ -39,33 +33,9 @@ export function UsersList({
   userTeams: { user_id: string; team_id: string }[];
   teamMap: Map<string, string>;
 }) {
-  const [query, setQuery] = useState("");
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return users;
-    return users.filter(
-      (u) => u.email.toLowerCase().includes(q) || (u.nickname ?? "").toLowerCase().includes(q)
-    );
-  }, [users, query]);
-
   return (
     <div className="flex flex-col gap-3">
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="ค้นหาด้วยอีเมลหรือชื่อเล่น"
-          className="pl-9"
-        />
-      </div>
-
-      {filtered.length === 0 && (
-        <p className="py-6 text-center text-sm text-muted-foreground">ไม่พบผู้ใช้งานที่ตรงกับการค้นหา</p>
-      )}
-
-      {filtered.map((u) => (
+      {users.map((u) => (
         <UserCard
           key={u.id}
           user={u}
@@ -79,11 +49,15 @@ export function UsersList({
   );
 }
 
+function sameSet(a: Set<string>, b: string[]): boolean {
+  return a.size === b.length && b.every((id) => a.has(id));
+}
+
 function UserCard({
   user: u,
   teams,
-  approvedTeamIds,
-  memberTeamIds,
+  approvedTeamIds: initialApprovedTeamIds,
+  memberTeamIds: initialMemberTeamIds,
   homeTeamName,
 }: {
   user: AppUser;
@@ -92,7 +66,74 @@ function UserCard({
   memberTeamIds: string[];
   homeTeamName: string | null;
 }) {
+  const router = useRouter();
   const [expanded, setExpanded] = useState(false);
+  const [pending, startTransition] = useTransition();
+
+  const [role, setRole] = useState<UserRole>(u.role);
+  const [memberTeamIds, setMemberTeamIds] = useState<Set<string>>(() => new Set(initialMemberTeamIds));
+  const [approvedTeamIds, setApprovedTeamIds] = useState<Set<string>>(() => new Set(initialApprovedTeamIds));
+
+  const hasChanges =
+    role !== u.role || !sameSet(memberTeamIds, initialMemberTeamIds) || !sameSet(approvedTeamIds, initialApprovedTeamIds);
+
+  function toggleMember(teamId: string) {
+    setMemberTeamIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(teamId)) next.delete(teamId);
+      else next.add(teamId);
+      return next;
+    });
+  }
+
+  function toggleApproved(teamId: string) {
+    setApprovedTeamIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(teamId)) next.delete(teamId);
+      else next.add(teamId);
+      return next;
+    });
+  }
+
+  function save() {
+    startTransition(async () => {
+      const tasks: Promise<void>[] = [];
+
+      if (role !== u.role) {
+        const fd = new FormData();
+        fd.append("id", u.id);
+        fd.append("role", role);
+        tasks.push(updateUserRole(fd));
+      }
+      if (!sameSet(memberTeamIds, initialMemberTeamIds)) {
+        const fd = new FormData();
+        fd.append("id", u.id);
+        memberTeamIds.forEach((id) => fd.append("team_ids", id));
+        tasks.push(updateMemberTeams(fd));
+      }
+      if (!sameSet(approvedTeamIds, initialApprovedTeamIds)) {
+        const fd = new FormData();
+        fd.append("id", u.id);
+        approvedTeamIds.forEach((id) => fd.append("team_ids", id));
+        tasks.push(updateApprovedTeams(fd));
+      }
+
+      await Promise.all(tasks);
+      toast({ variant: "success", title: "บันทึกการเปลี่ยนแปลงแล้ว" });
+      router.refresh();
+    });
+  }
+
+  function toggleActive() {
+    const fd = new FormData();
+    fd.append("id", u.id);
+    fd.append("is_active", (!u.is_active).toString());
+    startTransition(async () => {
+      await setUserActive(fd);
+      toast({ variant: "success", title: u.is_active ? "ปิดใช้งานแล้ว" : "เปิดใช้งานแล้ว" });
+      router.refresh();
+    });
+  }
 
   return (
     <div className="rounded-lg border border-border bg-white">
@@ -118,32 +159,22 @@ function UserCard({
       {expanded && (
         <div className="border-t border-border p-4 pt-3">
           <div className="flex flex-wrap items-center gap-2">
-            <ToastForm action={updateUserRole} successTitle="บันทึกสิทธิ์แล้ว" className="flex items-center gap-2">
-              <input type="hidden" name="id" value={u.id} />
-              <Select name="role" defaultValue={u.role}>
-                <SelectTrigger className="h-9 w-40">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(ROLE_LABEL).map(([value, label]) => (
-                    <SelectItem key={value} value={value}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button type="submit" size="sm" variant="outline">
-                บันทึกสิทธิ์
-              </Button>
-            </ToastForm>
+            <Select value={role} onValueChange={(v) => setRole(v as UserRole)} disabled={pending}>
+              <SelectTrigger className="h-9 w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(ROLE_LABEL).map(([value, label]) => (
+                  <SelectItem key={value} value={value}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-            <ToastForm action={setUserActive} successTitle={u.is_active ? "ปิดใช้งานแล้ว" : "เปิดใช้งานแล้ว"}>
-              <input type="hidden" name="id" value={u.id} />
-              <input type="hidden" name="is_active" value={(!u.is_active).toString()} />
-              <Button type="submit" size="sm" variant={u.is_active ? "destructive" : "outline"}>
-                {u.is_active ? "ปิดใช้งานผู้ใช้" : "เปิดใช้งานผู้ใช้"}
-              </Button>
-            </ToastForm>
+            <Button type="button" size="sm" variant={u.is_active ? "destructive" : "outline"} disabled={pending} onClick={toggleActive}>
+              {u.is_active ? "ปิดใช้งานผู้ใช้" : "เปิดใช้งานผู้ใช้"}
+            </Button>
           </div>
 
           <div className="mt-3 grid gap-3 border-t border-border pt-3 sm:grid-cols-2">
@@ -151,12 +182,11 @@ function UserCard({
               <p className="text-xs font-medium text-muted-foreground">สมาชิกทีม</p>
               <div className="mt-1.5">
                 <TeamChecklist
-                  userId={u.id}
                   teams={teams}
-                  initialSelected={memberTeamIds}
-                  action={updateMemberTeams}
-                  saveLabel="บันทึก"
-                  successTitle="บันทึกทีมที่เป็นสมาชิกแล้ว"
+                  selected={memberTeamIds}
+                  onToggle={toggleMember}
+                  onSelectAll={() => setMemberTeamIds(new Set(teams.map((t) => t.id)))}
+                  disabled={pending}
                 />
               </div>
             </div>
@@ -165,15 +195,20 @@ function UserCard({
               <p className="text-xs font-medium text-muted-foreground">หัวหน้าทีม (ผู้อนุมัติ)</p>
               <div className="mt-1.5">
                 <TeamChecklist
-                  userId={u.id}
                   teams={teams}
-                  initialSelected={approvedTeamIds}
-                  action={updateApprovedTeams}
-                  saveLabel="บันทึก"
-                  successTitle="บันทึกทีมที่ดูแลแล้ว"
+                  selected={approvedTeamIds}
+                  onToggle={toggleApproved}
+                  onSelectAll={() => setApprovedTeamIds(new Set(teams.map((t) => t.id)))}
+                  disabled={pending}
                 />
               </div>
             </div>
+          </div>
+
+          <div className="mt-3 flex justify-end border-t border-border pt-3">
+            <Button type="button" size="sm" variant={hasChanges ? "default" : "outline"} disabled={pending || !hasChanges} onClick={save}>
+              {pending ? "กำลังบันทึก..." : "บันทึก"}
+            </Button>
           </div>
         </div>
       )}

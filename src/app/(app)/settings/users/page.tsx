@@ -4,17 +4,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { TeamChecklist } from "./team-checklist";
 import { ToastForm } from "@/components/toast-form";
 import { DeleteButton } from "@/components/delete-button";
-import {
-  updateUserRole,
-  updateMemberTeams,
-  updateApprovedTeams,
-  setUserActive,
-  preProvisionUser,
-  removePendingUser,
-} from "./actions";
+import { UsersList } from "./users-list";
+import { preProvisionUser, removePendingUser } from "./actions";
 
 const ROLE_LABEL = { admin: "ผู้ดูแลระบบ", approver: "หัวหน้าทีม", user: "developer" } as const;
 
@@ -103,90 +96,13 @@ export default async function UsersSettingsPage() {
         )}
       </div>
 
-      <div className="flex flex-col gap-3">
-        {(users ?? []).map((u) => {
-          const approvedTeamIds = (teamLeads ?? []).filter((tl) => tl.user_id === u.id).map((tl) => tl.team_id);
-          const memberTeamIds = (userTeams ?? []).filter((ut) => ut.user_id === u.id).map((ut) => ut.team_id);
-
-          return (
-            <div key={u.id} className="rounded-lg border border-border bg-white p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-foreground">{u.email}</p>
-                  {u.nickname && <p className="text-xs text-muted-foreground">ชื่อเล่น: {u.nickname}</p>}
-                </div>
-                <Badge variant={u.is_active ? "success" : "secondary"}>
-                  {u.is_active ? "ใช้งาน" : "ปิดใช้งาน"}
-                </Badge>
-              </div>
-
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <ToastForm action={updateUserRole} successTitle="บันทึกสิทธิ์แล้ว" className="flex items-center gap-2">
-                  <input type="hidden" name="id" value={u.id} />
-                  <Select name="role" defaultValue={u.role}>
-                    <SelectTrigger className="h-9 w-40">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(ROLE_LABEL).map(([value, label]) => (
-                        <SelectItem key={value} value={value}>
-                          {label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button type="submit" size="sm" variant="outline">
-                    บันทึกสิทธิ์
-                  </Button>
-                </ToastForm>
-
-                <ToastForm
-                  action={setUserActive}
-                  successTitle={u.is_active ? "ปิดใช้งานแล้ว" : "เปิดใช้งานแล้ว"}
-                >
-                  <input type="hidden" name="id" value={u.id} />
-                  <input type="hidden" name="is_active" value={(!u.is_active).toString()} />
-                  <Button type="submit" size="sm" variant={u.is_active ? "destructive" : "outline"}>
-                    {u.is_active ? "ปิดใช้งานผู้ใช้" : "เปิดใช้งานผู้ใช้"}
-                  </Button>
-                </ToastForm>
-              </div>
-
-              {u.team_id && (
-                <p className="mt-2 text-xs text-muted-foreground">ทีมหลัก: {teamMap.get(u.team_id) ?? "-"}</p>
-              )}
-
-              <div className="mt-3 border-t border-border pt-3">
-                <p className="text-xs font-medium text-muted-foreground">ทีมที่เป็นสมาชิก (เลือกได้หลายทีม)</p>
-                <div className="mt-2">
-                  <TeamChecklist
-                    userId={u.id}
-                    teams={teams ?? []}
-                    initialSelected={memberTeamIds}
-                    action={updateMemberTeams}
-                    saveLabel="บันทึกทีมที่เป็นสมาชิก"
-                    successTitle="บันทึกทีมที่เป็นสมาชิกแล้ว"
-                  />
-                </div>
-              </div>
-
-              <div className="mt-3 border-t border-border pt-3">
-                <p className="text-xs font-medium text-muted-foreground">ทีมที่ดูแลอนุมัติ (เลือกได้หลายทีม)</p>
-                <div className="mt-2">
-                  <TeamChecklist
-                    userId={u.id}
-                    teams={teams ?? []}
-                    initialSelected={approvedTeamIds}
-                    action={updateApprovedTeams}
-                    saveLabel="บันทึกทีมที่ดูแล"
-                    successTitle="บันทึกทีมที่ดูแลแล้ว"
-                  />
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      <UsersList
+        users={users ?? []}
+        teams={teams ?? []}
+        teamLeads={teamLeads ?? []}
+        userTeams={userTeams ?? []}
+        teamMap={teamMap}
+      />
     </main>
   );
 }

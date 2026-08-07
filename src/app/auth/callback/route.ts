@@ -93,15 +93,25 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(teamId ? `${origin}/` : `${origin}/onboarding/team`);
     }
 
-    // No admin ever pre-provisioned this email — this is not a member of
-    // the organization as far as the app is concerned. Anyone with a Google
-    // account could otherwise self-register and immediately see whatever
-    // RLS grants role='user' (their own future leave data, team rosters,
-    // etc.), which is exactly the "data leaking to outsiders" risk this
-    // gate exists to close. Access now requires an admin to add the email
-    // via Settings → ผู้ใช้งาน/ทีม first (pending_user_roles/pending_team_leads).
-    await supabase.auth.signOut();
-    return NextResponse.redirect(`${origin}/login?error=not_provisioned`);
+    // No admin ever pre-provisioned this email — anyone with a Google
+    // account can still sign in and self-register here, always capped at
+    // role='user' with no team yet; pre-provisioning (Settings →
+    // ผู้ใช้งาน/ทีม) is only for granting an approver/admin role or a team
+    // ahead of time, not a gate on access itself.
+    const { error: insertError } = await admin.from("users").insert({
+      id: authUser.id,
+      email,
+      role: "user",
+      team_id: null,
+      is_active: true,
+    });
+
+    if (insertError) {
+      console.error("[auth/callback] self-registration insert failed:", insertError);
+      return NextResponse.redirect(`${origin}/login?error=profile_create_failed`);
+    }
+
+    return NextResponse.redirect(`${origin}/onboarding/team`);
   }
 
   if (!existing.is_active) {

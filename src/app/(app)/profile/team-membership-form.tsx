@@ -35,6 +35,9 @@ export function TeamMembershipForm({
   const [pending, startTransition] = useTransition();
   const [confirmOpen, setConfirmOpen] = useState(false);
 
+  const hasChanges =
+    selected.size !== initialSelected.length || initialSelected.some((id) => !selected.has(id));
+
   function toggle(teamId: string) {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -73,7 +76,9 @@ export function TeamMembershipForm({
       {teams.length === 0 ? (
         <p className="text-sm text-muted-foreground">ยังไม่มีทีมในระบบ</p>
       ) : (
-        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+        // Capped height + scroll so a large team count (20+) grows inside
+        // this box instead of pushing the rest of the page down indefinitely.
+        <div className="grid max-h-72 grid-cols-2 gap-2.5 overflow-y-auto pr-1 sm:grid-cols-3 md:grid-cols-4">
           {teams.map((t) => {
             const isSelected = selected.has(t.id);
             return (
@@ -112,8 +117,15 @@ export function TeamMembershipForm({
           })}
         </div>
       )}
-      <Button type="button" size="sm" variant="outline" className="self-start" disabled={pending} onClick={handleSaveClick}>
-        บันทึกทีม
+      <Button
+        type="button"
+        size="sm"
+        variant={hasChanges ? "default" : "outline"}
+        className="self-start"
+        disabled={pending || !hasChanges}
+        onClick={handleSaveClick}
+      >
+        {pending ? "กำลังบันทึก..." : "บันทึกทีม"}
       </Button>
 
       <ConfirmDialog

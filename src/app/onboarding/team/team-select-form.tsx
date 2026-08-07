@@ -71,7 +71,9 @@ export function TeamSelectForm({ teams }: { teams: TeamOption[] }) {
         <p className="text-center text-sm text-muted-foreground">ยังไม่มีทีมในระบบ กรุณาติดต่อผู้ดูแลระบบ</p>
       )}
 
-      <div className="grid grid-cols-2 gap-2.5">
+      {/* Capped height + scroll so a large team count grows inside this box
+          instead of pushing the confirm button off-screen. */}
+      <div className="grid max-h-[26rem] grid-cols-2 gap-2.5 overflow-y-auto pr-1">
         {teams.map((team) => {
           const isSelected = selected.has(team.id);
           return (

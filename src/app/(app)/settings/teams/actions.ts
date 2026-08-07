@@ -63,11 +63,15 @@ export async function assignTeamLeadByEmail(formData: FormData) {
     // consume time, so it stays correct even if other people join the chain
     // in the meantime. onConflict targets (email, team_id) — adding a 2nd,
     // 3rd, ... team just adds another row, it never overwrites an earlier
-    // pending team.
+    // pending team. Also mirrors Settings → ผู้ใช้งาน's pre-provision-as-approver
+    // flow by recording a pending_user_roles row too, so this invite shows
+    // up in that page's "รอเข้าระบบครั้งแรก" preview list the same way.
+    await supabase.from("pending_user_roles").upsert({ email, role: "approver" }, { onConflict: "email" });
     await supabase
       .from("pending_team_leads")
       .upsert({ email, team_id: teamId, approval_order: null }, { onConflict: "email,team_id" });
     revalidatePath("/settings/teams");
+    revalidatePath("/settings/users");
     return;
   }
 
@@ -97,8 +101,26 @@ export async function removePendingInvite(formData: FormData) {
   const id = String(formData.get("id"));
 
   const supabase = createServerSupabaseClient();
+  const { data: invite } = await supabase.from("pending_team_leads").select("email").eq("id", id).maybeSingle();
   await supabase.from("pending_team_leads").delete().eq("id", id);
+
+  if (invite) {
+    const { data: remaining } = await supabase
+      .from("pending_team_leads")
+      .select("id")
+      .eq("email", invite.email)
+      .limit(1);
+    if (!remaining || remaining.length === 0) {
+      // No pending team-lead invites left for this email — drop the
+      // role='approver' placeholder written alongside it too, so canceling
+      // the last invite doesn't leave them provisioned as an approver with
+      // no team to lead on their first login.
+      await supabase.from("pending_user_roles").delete().eq("email", invite.email).eq("role", "approver");
+    }
+  }
+
   revalidatePath("/settings/teams");
+  revalidatePath("/settings/users");
 }
 
 /**

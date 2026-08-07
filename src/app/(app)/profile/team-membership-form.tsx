@@ -41,6 +41,12 @@ export function TeamMembershipForm({
   const hasChanges =
     selected.size !== initialSelected.length || initialSelected.some((id) => !selected.has(id));
 
+  // Keep any already-selected team visible even past the collapse cutoff —
+  // otherwise a team sorted 9th+ that the user already belongs to would
+  // never render while collapsed, making their membership look incomplete.
+  const visibleTeams = showAll ? teams : teams.filter((t, i) => i < MAX_VISIBLE_TEAMS || selected.has(t.id));
+  const hiddenCount = teams.length - visibleTeams.length;
+
   function toggle(teamId: string) {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -80,7 +86,7 @@ export function TeamMembershipForm({
         <p className="text-sm text-muted-foreground">ยังไม่มีทีมในระบบ</p>
       ) : (
         <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 md:grid-cols-4">
-          {(showAll ? teams : teams.slice(0, MAX_VISIBLE_TEAMS)).map((t) => {
+          {visibleTeams.map((t) => {
             const isSelected = selected.has(t.id);
             return (
               <button
@@ -125,7 +131,7 @@ export function TeamMembershipForm({
           onClick={() => setShowAll((v) => !v)}
           className="self-center text-xs font-medium text-primary hover:underline"
         >
-          {showAll ? "แสดงน้อยลง" : `เพิ่มเติม... (+${teams.length - MAX_VISIBLE_TEAMS})`}
+          {showAll ? "แสดงน้อยลง" : `เพิ่มเติม... (+${hiddenCount})`}
         </button>
       )}
 

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Search, UserPlus } from "lucide-react";
 import { requireAdmin } from "@/lib/auth";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -35,8 +36,14 @@ export default async function UsersSettingsPage({ searchParams }: { searchParams
   // rows up front regardless of how many were ever shown.
   let usersQuery = supabase.from("users").select("*", { count: "exact" }).order("email").range(from, to);
   if (q) {
-    const escaped = q.replace(/[%_]/g, (c) => `\\${c}`);
-    usersQuery = usersQuery.or(`email.ilike.%${escaped}%,nickname.ilike.%${escaped}%`);
+    // Escape LIKE metacharacters first, then quote the whole value for
+    // PostgREST's own or() grammar — a comma or parenthesis in the search
+    // text would otherwise be parsed as PostgREST filter syntax (ending the
+    // condition early / starting a new one) instead of literal text.
+    const likeEscaped = q.replace(/[\\%_]/g, (c) => `\\${c}`);
+    const pattern = `%${likeEscaped}%`;
+    const quoted = `"${pattern.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+    usersQuery = usersQuery.or(`email.ilike.${quoted},nickname.ilike.${quoted}`);
   }
 
   const [{ data: users, count }, { data: teams }, { data: pendingUsers }, { data: pendingUserTeams }, { data: pendingTeamLeads }] =
@@ -67,6 +74,14 @@ export default async function UsersSettingsPage({ searchParams }: { searchParams
     if (p > 1) params.set("page", String(p));
     const qs = params.toString();
     return qs ? `/settings/users?${qs}` : "/settings/users";
+  }
+
+  // A stale/out-of-range page param (bookmarked link, or the result set
+  // shrinking after the URL was set) would otherwise render a
+  // self-contradictory "หน้า 3 / 1" alongside "ไม่พบผู้ใช้งาน" — send the
+  // admin back to the last valid page instead.
+  if (page > totalPages) {
+    redirect(pageHref(totalPages));
   }
 
   return (
@@ -168,6 +183,7 @@ export default async function UsersSettingsPage({ searchParams }: { searchParams
           teams={teams ?? []}
           teamLeads={teamLeads ?? []}
           userTeams={userTeams ?? []}
+          teamMap={teamMap}
         />
       )}
 

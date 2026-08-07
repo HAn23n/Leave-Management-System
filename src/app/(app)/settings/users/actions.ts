@@ -128,26 +128,30 @@ export async function preProvisionUser(formData: FormData) {
   const role = String(formData.get("role") ?? "user");
   const teamIds = formData.getAll("team_ids").map(String);
   if (!email || !PROVISIONABLE_ROLES.includes(role as UserRole)) return;
-  if (role === "approver" && teamIds.length === 0) return;
+  // Throw rather than silently return — ToastForm otherwise shows a
+  // success toast for any resolved promise regardless of what the action
+  // actually did, which previously made this look like it worked.
+  if (role === "approver" && teamIds.length === 0) {
+    throw new Error("เลือก \"หัวหน้าทีม\" ต้องติ๊กอย่างน้อย 1 ทีมที่จะดูแล");
+  }
 
   const supabase = createServerSupabaseClient();
-  const { data: existingUser } = await supabase.from("users").select("id").eq("email", email).maybeSingle();
+  const { data: existingUser } = await supabase.from("users").select("id, role").eq("email", email).maybeSingle();
 
   if (existingUser) {
     if (role === "approver") {
       // Role follows automatically once team_leads exists (trg_team_leads_sync_role,
-      // migration 0018) — no direct role update needed here. addTeamLead runs
-      // one team at a time (needs to compute each new lead's approval_order
-      // in sequence); a lead is always also upserted as a member.
+      // migration 0018) — no direct role update needed here. Each team's
+      // approval_order is computed independently (scoped by team_id), so
+      // these can run in parallel rather than one at a time; a lead is
+      // always also upserted as a member.
       await supabase
         .from("user_teams")
         .upsert(
           teamIds.map((teamId) => ({ user_id: existingUser.id, team_id: teamId })),
           { onConflict: "user_id,team_id", ignoreDuplicates: true }
         );
-      for (const teamId of teamIds) {
-        await addTeamLead(supabase, teamId, existingUser.id);
-      }
+      await Promise.all(teamIds.map((teamId) => addTeamLead(supabase, teamId, existingUser.id)));
     } else {
       // Already signed in before — apply directly instead of queueing. This
       // form only grants/adds access, so team selection here is additive —
@@ -155,6 +159,13 @@ export async function preProvisionUser(formData: FormData) {
       // "ทีมที่เป็นสมาชิก" checklist below, which reconciles to exactly what's
       // checked). Membership goes through user_teams (users.team_id just
       // follows along — see sync_user_home_team, migration 0023).
+      // Demoting an existing approver away from "approver" here has to drop
+      // their team_leads rows too, same as updateUserRole below — otherwise
+      // they'd keep approval authority in the chain despite showing as a
+      // plain user/admin.
+      if (existingUser.role === "approver" && role !== "approver") {
+        await supabase.from("team_leads").delete().eq("user_id", existingUser.id);
+      }
       await supabase.from("users").update({ role: role as UserRole }).eq("id", existingUser.id);
       if (teamIds.length > 0) {
         await supabase

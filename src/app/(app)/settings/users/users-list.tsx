@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -25,11 +25,13 @@ export function UsersList({
   teams,
   teamLeads,
   userTeams,
+  teamMap,
 }: {
   users: AppUser[];
   teams: TeamOption[];
   teamLeads: { user_id: string; team_id: string }[];
   userTeams: { user_id: string; team_id: string }[];
+  teamMap: Map<string, string>;
 }) {
   return (
     <div className="flex flex-col gap-3">
@@ -40,6 +42,7 @@ export function UsersList({
           teams={teams}
           approvedTeamIds={teamLeads.filter((tl) => tl.user_id === u.id).map((tl) => tl.team_id)}
           memberTeamIds={userTeams.filter((ut) => ut.user_id === u.id).map((ut) => ut.team_id)}
+          homeTeamName={u.team_id ? teamMap.get(u.team_id) ?? "-" : null}
         />
       ))}
     </div>
@@ -55,11 +58,13 @@ function UserCard({
   teams,
   approvedTeamIds: initialApprovedTeamIds,
   memberTeamIds: initialMemberTeamIds,
+  homeTeamName,
 }: {
   user: AppUser;
   teams: TeamOption[];
   approvedTeamIds: string[];
   memberTeamIds: string[];
+  homeTeamName: string | null;
 }) {
   const router = useRouter();
   const [expanded, setExpanded] = useState(false);
@@ -71,6 +76,20 @@ function UserCard({
 
   const hasChanges =
     role !== u.role || !sameSet(memberTeamIds, initialMemberTeamIds) || !sameSet(approvedTeamIds, initialApprovedTeamIds);
+
+  // <UserCard key={u.id}> survives a router.refresh() triggered by anything
+  // OTHER than this card's own save (a sibling card's save, a concurrent
+  // edit by another admin, or the DB's own role/team_leads sync trigger) —
+  // without this, its local edit state would silently drift from the fresh
+  // server truth. Only resync while there's no in-progress local edit, so
+  // this never discards something the admin is mid-way through changing.
+  useEffect(() => {
+    if (hasChanges) return;
+    setRole(u.role);
+    setMemberTeamIds(new Set(initialMemberTeamIds));
+    setApprovedTeamIds(new Set(initialApprovedTeamIds));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [u.role, [...initialMemberTeamIds].sort().join(","), [...initialApprovedTeamIds].sort().join(",")]);
 
   function toggleMember(teamId: string) {
     setMemberTeamIds((prev) => {
@@ -92,28 +111,44 @@ function UserCard({
 
   function save() {
     startTransition(async () => {
-      const tasks: Promise<void>[] = [];
+      try {
+        // Role change first, awaited on its own — it can delete this user's
+        // team_leads rows (demoting away from approver). Only once that has
+        // actually landed do the team checklists get reconciled, otherwise
+        // an approved-teams addTeamLead insert racing the role update could
+        // leave team_leads non-empty right after a demotion, which the DB's
+        // own sync_approver_role trigger would then read back as "still an
+        // approver" and silently undo the role change.
+        if (role !== u.role) {
+          const fd = new FormData();
+          fd.append("id", u.id);
+          fd.append("role", role);
+          await updateUserRole(fd);
+        }
 
-      if (role !== u.role) {
-        const fd = new FormData();
-        fd.append("id", u.id);
-        fd.append("role", role);
-        tasks.push(updateUserRole(fd));
-      }
-      if (!sameSet(memberTeamIds, initialMemberTeamIds)) {
-        const fd = new FormData();
-        fd.append("id", u.id);
-        memberTeamIds.forEach((id) => fd.append("team_ids", id));
-        tasks.push(updateMemberTeams(fd));
-      }
-      if (!sameSet(approvedTeamIds, initialApprovedTeamIds)) {
-        const fd = new FormData();
-        fd.append("id", u.id);
-        approvedTeamIds.forEach((id) => fd.append("team_ids", id));
-        tasks.push(updateApprovedTeams(fd));
+        const teamTasks: Promise<void>[] = [];
+        if (!sameSet(memberTeamIds, initialMemberTeamIds)) {
+          const fd = new FormData();
+          fd.append("id", u.id);
+          memberTeamIds.forEach((id) => fd.append("team_ids", id));
+          teamTasks.push(updateMemberTeams(fd));
+        }
+        if (!sameSet(approvedTeamIds, initialApprovedTeamIds)) {
+          const fd = new FormData();
+          fd.append("id", u.id);
+          approvedTeamIds.forEach((id) => fd.append("team_ids", id));
+          teamTasks.push(updateApprovedTeams(fd));
+        }
+        await Promise.all(teamTasks);
+      } catch (err) {
+        toast({
+          variant: "destructive",
+          title: err instanceof Error ? err.message : "บันทึกไม่สำเร็จ กรุณาลองใหม่อีกครั้ง",
+        });
+        router.refresh();
+        return;
       }
 
-      await Promise.all(tasks);
       toast({ variant: "success", title: "บันทึกการเปลี่ยนแปลงแล้ว" });
       router.refresh();
     });
@@ -170,6 +205,8 @@ function UserCard({
               {u.is_active ? "ปิดใช้งานผู้ใช้" : "เปิดใช้งานผู้ใช้"}
             </Button>
           </div>
+
+          {homeTeamName && <p className="mt-2 text-xs text-muted-foreground">ทีมหลัก: {homeTeamName}</p>}
 
           <div className="mt-3 grid gap-3 border-t border-border pt-3 sm:grid-cols-2">
             <div>

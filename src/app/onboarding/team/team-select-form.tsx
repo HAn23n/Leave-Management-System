@@ -25,6 +25,12 @@ export function TeamSelectForm({ teams }: { teams: TeamOption[] }) {
   const [error, setError] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
 
+  // Keep any already-selected team visible even past the collapse cutoff —
+  // otherwise toggling a team beyond index 8 and then collapsing back would
+  // hide it while it's still selected.
+  const visibleTeams = showAll ? teams : teams.filter((t, i) => i < MAX_VISIBLE_TEAMS || selected.has(t.id));
+  const hiddenCount = teams.length - visibleTeams.length;
+
   function toggle(teamId: string) {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -75,7 +81,7 @@ export function TeamSelectForm({ teams }: { teams: TeamOption[] }) {
       )}
 
       <div className="grid grid-cols-2 gap-2.5">
-        {(showAll ? teams : teams.slice(0, MAX_VISIBLE_TEAMS)).map((team) => {
+        {visibleTeams.map((team) => {
           const isSelected = selected.has(team.id);
           return (
             <button
@@ -118,7 +124,7 @@ export function TeamSelectForm({ teams }: { teams: TeamOption[] }) {
           onClick={() => setShowAll((v) => !v)}
           className="self-center text-xs font-medium text-primary hover:underline"
         >
-          {showAll ? "แสดงน้อยลง" : `เพิ่มเติม... (+${teams.length - MAX_VISIBLE_TEAMS})`}
+          {showAll ? "แสดงน้อยลง" : `เพิ่มเติม... (+${hiddenCount})`}
         </button>
       )}
 

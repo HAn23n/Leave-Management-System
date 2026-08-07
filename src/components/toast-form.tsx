@@ -34,7 +34,15 @@ export function ToastForm({
     const formData = new FormData(form);
 
     startTransition(async () => {
-      await action(formData);
+      try {
+        await action(formData);
+      } catch (err) {
+        toast({
+          variant: "destructive",
+          title: err instanceof Error ? err.message : "เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง",
+        });
+        return;
+      }
       toast({ variant: "success", title: successTitle });
       if (resetOnSuccess) form.reset();
       router.refresh();

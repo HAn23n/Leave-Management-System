@@ -146,31 +146,33 @@ function UserCard({
             </ToastForm>
           </div>
 
-          <div className="mt-3 border-t border-border pt-3">
-            <p className="text-xs font-medium text-muted-foreground">ทีมที่เป็นสมาชิก (เลือกได้หลายทีม)</p>
-            <div className="mt-2">
-              <TeamChecklist
-                userId={u.id}
-                teams={teams}
-                initialSelected={memberTeamIds}
-                action={updateMemberTeams}
-                saveLabel="บันทึกทีมที่เป็นสมาชิก"
-                successTitle="บันทึกทีมที่เป็นสมาชิกแล้ว"
-              />
+          <div className="mt-3 grid gap-3 border-t border-border pt-3 sm:grid-cols-2">
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">สมาชิกทีม</p>
+              <div className="mt-1.5">
+                <TeamChecklist
+                  userId={u.id}
+                  teams={teams}
+                  initialSelected={memberTeamIds}
+                  action={updateMemberTeams}
+                  saveLabel="บันทึก"
+                  successTitle="บันทึกทีมที่เป็นสมาชิกแล้ว"
+                />
+              </div>
             </div>
-          </div>
 
-          <div className="mt-3 border-t border-border pt-3">
-            <p className="text-xs font-medium text-muted-foreground">ทีมที่ดูแลอนุมัติ (เลือกได้หลายทีม)</p>
-            <div className="mt-2">
-              <TeamChecklist
-                userId={u.id}
-                teams={teams}
-                initialSelected={approvedTeamIds}
-                action={updateApprovedTeams}
-                saveLabel="บันทึกทีมที่ดูแล"
-                successTitle="บันทึกทีมที่ดูแลแล้ว"
-              />
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">หัวหน้าทีม (ผู้อนุมัติ)</p>
+              <div className="mt-1.5">
+                <TeamChecklist
+                  userId={u.id}
+                  teams={teams}
+                  initialSelected={approvedTeamIds}
+                  action={updateApprovedTeams}
+                  saveLabel="บันทึก"
+                  successTitle="บันทึกทีมที่ดูแลแล้ว"
+                />
+              </div>
             </div>
           </div>
         </div>

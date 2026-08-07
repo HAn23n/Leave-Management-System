@@ -2,8 +2,10 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Check, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 
 interface TeamOption {
@@ -16,7 +18,8 @@ interface TeamOption {
  * one has a floor (can't save down to zero teams, since that locks the user
  * out to /onboarding/team) and confirms before actually removing a team,
  * since dropping membership can affect which team a future leave request
- * gets filed under.
+ * gets filed under. Same card-grid look as the onboarding team picker, so
+ * the two don't visually drift apart.
  */
 export function TeamMembershipForm({
   teams,
@@ -67,21 +70,48 @@ export function TeamMembershipForm({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap gap-3">
-        {teams.map((t) => (
-          <label key={t.id} className="flex items-center gap-1.5 text-sm text-foreground">
-            <input
-              type="checkbox"
-              checked={selected.has(t.id)}
-              onChange={() => toggle(t.id)}
-              disabled={pending}
-              className="h-4 w-4 rounded border-input accent-primary"
-            />
-            {t.name}
-          </label>
-        ))}
-        {teams.length === 0 && <span className="text-sm text-muted-foreground">ยังไม่มีทีมในระบบ</span>}
-      </div>
+      {teams.length === 0 ? (
+        <p className="text-sm text-muted-foreground">ยังไม่มีทีมในระบบ</p>
+      ) : (
+        <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+          {teams.map((t) => {
+            const isSelected = selected.has(t.id);
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => toggle(t.id)}
+                disabled={pending}
+                aria-pressed={isSelected}
+                className={cn(
+                  "relative flex flex-col items-center gap-2 rounded-2xl border p-3 text-center transition-all duration-150 disabled:pointer-events-none disabled:opacity-50",
+                  isSelected
+                    ? "border-primary/60 bg-accent shadow-sm shadow-primary/10"
+                    : "border-input bg-background hover:border-primary/30 hover:bg-accent/40"
+                )}
+              >
+                <span
+                  className={cn(
+                    "absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full border transition-colors",
+                    isSelected ? "gradient-primary border-transparent text-primary-foreground" : "border-input bg-background"
+                  )}
+                >
+                  {isSelected && <Check className="h-3 w-3" strokeWidth={3} />}
+                </span>
+                <span
+                  className={cn(
+                    "flex h-8 w-8 items-center justify-center rounded-full",
+                    isSelected ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
+                  )}
+                >
+                  <Users className="h-3.5 w-3.5" />
+                </span>
+                <span className="text-xs font-medium leading-tight text-foreground">{t.name}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
       <Button type="button" size="sm" variant="outline" className="self-start" disabled={pending} onClick={handleSaveClick}>
         บันทึกทีม
       </Button>

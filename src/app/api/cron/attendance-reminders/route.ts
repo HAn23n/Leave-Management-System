@@ -11,6 +11,10 @@ import { nowInBangkok, todayIso } from "@/lib/date";
  * and it hasn't already fired today (last_*_reminder_date). Since this only
  * runs once a day now, a check_in/check_out_reminder_time set later than
  * 09:00 won't fire until the following day's run.
+ *
+ * Skipped entirely on non-business days (Sat/Sun or a company holiday) —
+ * same business-day definition used for leave-day calculation elsewhere
+ * (calcTotalDaysClient) — since nobody is expected to check in then.
  */
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
@@ -25,6 +29,15 @@ export async function GET(request: NextRequest) {
   }
 
   const today = todayIso();
+  const dayOfWeek = nowInBangkok().getDay(); // 0 = Sunday, 6 = Saturday
+  if (dayOfWeek === 0 || dayOfWeek === 6) {
+    return NextResponse.json({ checkInSent: 0, checkOutSent: 0, skipped: "weekend" });
+  }
+  const { data: holidayToday } = await admin.from("holidays").select("id").eq("holiday_date", today).maybeSingle();
+  if (holidayToday) {
+    return NextResponse.json({ checkInSent: 0, checkOutSent: 0, skipped: "holiday" });
+  }
+
   const nowTime = format(nowInBangkok(), "HH:mm:ss");
 
   let checkInSent = 0;

@@ -6,6 +6,7 @@ import { resolveApprovalChain } from "@/lib/approval-chain";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { safeDbErrorMessage } from "@/lib/db-error";
 import { sendOrQueueEmail } from "@/lib/email-outbox";
+import { createApprovalToken } from "@/lib/approval-tokens";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -200,6 +201,11 @@ export async function decideOnPendingRequest({
           supabase.from("leave_types").select("name").eq("id", current.leave_type_id).single(),
         ]);
         if (requester) {
+          const token = await createApprovalToken({
+            requestId: current.id,
+            approverId: nextLevel.approver.id,
+            level: nextLevel.level,
+          });
           await sendOrQueueEmail(
             admin,
             {
@@ -213,6 +219,7 @@ export async function decideOnPendingRequest({
                 endDate: current.end_date,
                 totalDays: current.total_days,
                 requestUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/leave-requests/${current.request_no}`,
+                approveTokenUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/approve/${token}`,
               },
             },
             nextLevel.approver.email
@@ -346,6 +353,11 @@ export async function skipCurrentApprover({
           supabase.from("leave_types").select("name").eq("id", current.leave_type_id).single(),
         ]);
         if (requester) {
+          const token = await createApprovalToken({
+            requestId: current.id,
+            approverId: nextLevel.approver.id,
+            level: nextLevel.level,
+          });
           await sendOrQueueEmail(
             admin,
             {
@@ -359,6 +371,7 @@ export async function skipCurrentApprover({
                 endDate: current.end_date,
                 totalDays: current.total_days,
                 requestUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/leave-requests/${current.request_no}`,
+                approveTokenUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/approve/${token}`,
               },
             },
             nextLevel.approver.email

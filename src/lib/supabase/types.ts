@@ -160,6 +160,35 @@ export interface EmailOutbox {
   sent_at: string | null;
 }
 
+export interface ApprovalToken {
+  id: string;
+  request_id: string;
+  approver_id: string;
+  level: number;
+  token_hash: string;
+  expires_at: string;
+  used_at: string | null;
+  created_at: string;
+}
+
+export interface PerformanceEvaluation {
+  id: string;
+  user_id: string;
+  team_id: string;
+  evaluator_id: string;
+  period: string;
+  score_punctuality: number;
+  score_responsibility: number;
+  score_achievement: number;
+  score_delivery: number;
+  score_skill: number;
+  total_percentage: number;
+  passed: boolean;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 // Plain interfaces (no index signature) don't structurally extend
 // Record<string, unknown> under TS's rules. Intersecting with it here satisfies
 // supabase-js's GenericSchema constraint without changing the field types used
@@ -190,6 +219,8 @@ export interface Database {
       email_outbox: Table<EmailOutbox>;
       attendance_logs: Table<AttendanceLog>;
       attendance_settings: Table<AttendanceSettings>;
+      approval_tokens: Table<ApprovalToken>;
+      performance_evaluations: Table<PerformanceEvaluation>;
     };
     Views: Record<string, never>;
     Functions: {

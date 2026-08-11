@@ -3,7 +3,7 @@ import type { UserRole } from "@/lib/supabase/types";
 export interface NavItem {
   href: string;
   label: string;
-  icon: "home" | "search" | "plus-circle" | "bar-chart" | "user" | "settings";
+  icon: "home" | "search" | "plus-circle" | "bar-chart" | "user" | "settings" | "clipboard-check";
 }
 
 // Approvers only review/act on documents — they never submit their own leave
@@ -17,6 +17,9 @@ export function getNavItems(role: UserRole): NavItem[] {
     items.push({ href: "/leave-requests/new", label: "บันทึกลา", icon: "plus-circle" });
   }
   items.push({ href: "/reports", label: "รายงาน", icon: "bar-chart" });
+  if (role === "approver" || role === "admin") {
+    items.push({ href: "/evaluations", label: "ประเมินผล", icon: "clipboard-check" });
+  }
   if (role === "admin") {
     items.push({ href: "/settings", label: "ตั้งค่า", icon: "settings" });
   }

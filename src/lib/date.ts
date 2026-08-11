@@ -4,6 +4,15 @@ import { toZonedTime } from "date-fns-tz";
 export const BANGKOK_TZ = "Asia/Bangkok";
 const THAI_YEAR_OFFSET = 543;
 
+const MONTH_SHORT_TH = [
+  "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
+  "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค.",
+];
+const MONTH_LONG_TH = [
+  "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
+  "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม",
+];
+
 /**
  * Formats a Gregorian (CE) date (from the DB, 'yyyy-MM-dd' string or Date) as a
  * Buddhist Era (BE) display string. E.g. '2026-08-03' -> '3 ส.ค. 2569'.
@@ -18,15 +27,8 @@ export function formatThaiDate(
   const buddhistYear = date.getFullYear() + THAI_YEAR_OFFSET;
   const day = date.getDate();
   const month = date.getMonth();
-
-  const monthShort = [
-    "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
-    "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค.",
-  ];
-  const monthLong = [
-    "มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน",
-    "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม",
-  ];
+  const monthShort = MONTH_SHORT_TH;
+  const monthLong = MONTH_LONG_TH;
 
   if (pattern === "iso-be") {
     return `${day.toString().padStart(2, "0")}/${(month + 1)
@@ -60,6 +62,28 @@ export function nowInBangkok(): Date {
 
 export function todayIso(): string {
   return format(nowInBangkok(), "yyyy-MM-dd");
+}
+
+/** This month, as 'yyyy-MM' — the default period for the evaluation form. */
+export function currentEvaluationPeriod(): string {
+  return format(nowInBangkok(), "yyyy-MM");
+}
+
+/**
+ * A monthly evaluation for `period` ('yyyy-MM') is editable once that month
+ * has started — and stays editable indefinitely after, so a lead catching up
+ * on a skipped month never gets locked out. Only a period that hasn't
+ * started yet (a future month) is blocked, since there's nothing to score
+ * yet. Bangkok-local, same clock as every other date decision in this app.
+ */
+export function isEvaluationPeriodEditable(period: string): boolean {
+  const [yearStr, monthStr] = period.split("-");
+  const year = Number(yearStr);
+  const month = Number(monthStr); // 1-12
+  if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) return false;
+
+  const windowStart = `${yearStr}-${monthStr}-01`;
+  return todayIso() >= windowStart;
 }
 
 export type LeavePeriodClient = "full" | "morning" | "afternoon";

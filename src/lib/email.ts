@@ -92,6 +92,8 @@ export async function notifyNewLeaveRequest(params: {
   endDate: string;
   totalDays: number | null;
   requestUrl: string;
+  /** One-click approve/reject link, e.g. `${NEXT_PUBLIC_SITE_URL}/approve/{token}` — skips login entirely. */
+  approveTokenUrl?: string;
 }): Promise<void> {
   const transporter = getMailTransporter();
   if (!transporter) return;
@@ -106,6 +108,7 @@ export async function notifyNewLeaveRequest(params: {
       ${infoRow("วันที่", `${formatThaiDate(params.startDate)} - ${formatThaiDate(params.endDate)}`)}
       ${params.totalDays != null ? infoRow("จำนวนวัน", `${params.totalDays} วัน`) : ""}
     </table>
+    ${params.approveTokenUrl ? ctaButton(params.approveTokenUrl, "อนุมัติทันทีจากอีเมล") : ""}
     ${ctaButton(params.requestUrl, "ดูรายละเอียดและอนุมัติ")}
   `;
 

@@ -5,12 +5,17 @@ import { notifyCheckInReminder, notifyCheckOutReminder } from "@/lib/email";
 import { nowInBangkok, todayIso } from "@/lib/date";
 
 /**
- * Runs once daily at 09:00 Bangkok time (see vercel.json — Vercel Hobby caps
- * cron jobs at once/day) and fires each reminder if Bangkok clock time is
- * already at/after the admin-configured reminder time (attendance_settings)
- * and it hasn't already fired today (last_*_reminder_date). Since this only
- * runs once a day now, a check_in/check_out_reminder_time set later than
- * 09:00 won't fire until the following day's run.
+ * NOT currently scheduled — the cron entry was removed from vercel.json, so
+ * no reminder emails are sent. To turn it back on, add this back to
+ * vercel.json (once daily at 09:00 Bangkok time; Vercel Hobby caps cron jobs
+ * at once/day):
+ *   "crons": [{ "path": "/api/cron/attendance-reminders", "schedule": "0 2 * * *" }]
+ *
+ * When scheduled, it fires each reminder if Bangkok clock time is already
+ * at/after the admin-configured reminder time (attendance_settings) and it
+ * hasn't already fired today (last_*_reminder_date). Since it only runs once
+ * a day, a check_in/check_out_reminder_time set later than 09:00 won't fire
+ * until the following day's run.
  *
  * Skipped entirely on non-business days (Sat/Sun or a company holiday) —
  * same business-day definition used for leave-day calculation elsewhere

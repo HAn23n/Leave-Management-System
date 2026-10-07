@@ -7,6 +7,7 @@ import { transitionLeaveRequest } from "@/lib/leave-requests";
 import { resolveApprovers, firstApprovalLevel } from "@/lib/approval-chain";
 import { sendOrQueueEmail } from "@/lib/email-outbox";
 import { rateLimitResponse } from "@/lib/rate-limit";
+import { createApprovalToken } from "@/lib/approval-tokens";
 
 // draft/returned -> pending, owner only. Notifies the resolved approver(s).
 export async function POST(_request: NextRequest, { params }: { params: { id: string } }) {
@@ -78,8 +79,13 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
       const requestUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/leave-requests/${requestRow.request_no}`;
       const admin = createAdminSupabaseClient();
       await Promise.all(
-        approvers.map((approver) =>
-          sendOrQueueEmail(
+        approvers.map(async (approver) => {
+          const token = await createApprovalToken({
+            requestId: requestRow.id,
+            approverId: approver.id,
+            level: startLevel,
+          });
+          await sendOrQueueEmail(
             admin,
             {
               type: "new_request",
@@ -92,11 +98,12 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
                 endDate: requestRow.end_date,
                 totalDays: requestRow.total_days,
                 requestUrl,
+                approveTokenUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/approve/${token}`,
               },
             },
             approver.email
-          )
-        )
+          );
+        })
       );
     })()
   );
